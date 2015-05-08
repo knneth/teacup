@@ -1,0 +1,56 @@
+BUGS
+
+- fix web10g log file version chaos caused by version 2.0.9 producing different
+  columns compared to version 2.0.7 (Windows etstas logger is equivalent to
+  version 2.0.7). This only affects plots of unsmoothed TCP RTTs though.
+  -> new version of web10g-logger will log the attribute names. need to attach
+     atribute names for old log files based on the definitions. Allow using names
+     instead of column numbers to refer to attributes 
+- ??? 
+
+POSSIBLE NEW FEATURES
+
+- move custom command execution after router pipe setup?
+- add per host Linux kernel configuration 
+- use @serial decorator for tasks that cannot run in parallel
+- add actually used tcp cc algorithm in file name if host<N> specified?
+- log start/end time of experiment explicitly?
+
+FUTURE WORK
+
+- use internal names for host instead of control interfaces. would make it easier
+  to transition to different networks, but requires and additional mapping table.
+- check that all hosts are properly time synchronised (simple check implemented,
+  but could look at ntp sync data in more detail)
+- gzip all data files created used for plotting, change plot function so they read
+  from gzipped files (save disk space)
+- a lot of the code could be a lot more user friendly, with extra parameter checks, 
+  checks for existance of files, better error messages. but will take some time to
+  implement.
+- filter out cwnd during fast recovery for siftr to avoid getting funky cwnd values
+- pre-boot custom commands, e.g. change /etc/loader.conf on FreeBSD
+- change the code to get the MAC address directly, current approach
+  is a bit inelegant
+- improve parameter checking
+- create different example configs instead / in additon to the big one
+- add analysis for collatoral damage vs service quality
+  - delay distribution DASH
+  - download time distribution (over bursts) DASH
+  - delay and jitter distribution for voip
+  - download times / rates for background tcp
+    - iperf output
+    - tcptrace -l outputs total goodput but not over time
+  - loss rates
+- refactor code (change to OO)
+  - traffic generator class
+    - methods that are called for each generator from different places
+      - check, initial_cleanup, start, stop, final_cleanup 
+    - register method
+  - logger class similar to traffic generator class
+- improve code
+  - start/stop traffic generators in parallel (quite a bit of effort) (BASICALLY DONE)
+    - start: split list by host, parallel execute for each host (difficult)
+      - without knowledge of tools don't know exactly what to start where 
+      - must ensure dependencies are taken care of, e.g. server started before client
+  - stop: split task list by host, parallel excute for each host
+- refactor code, use objects

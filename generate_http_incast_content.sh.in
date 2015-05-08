@@ -1,0 +1,14 @@
+#!/bin/sh
+# generate 'content' for incast scenario with various sizes 
+
+# file sizes in kB
+SIZES="@SIZES@"
+
+for S in $SIZES; do
+	mkdir -p incast_files-${S}
+
+	if [ ! -e incast_files-${S}/1 ] ; then	
+		dd if=/dev/zero of=incast_files-${S}/1 bs=${S}k count=1 2> /dev/null; 
+	fi;
+done;
+

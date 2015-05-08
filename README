@@ -1,0 +1,588 @@
+TEACUP (TCP Experiment Automation Controlled Using Python) README 
+=================================================================
+
+$Id: README 972 2015-02-12 23:53:05Z szander $
+
+ACKNOWLEDGMENTS
+---------------
+
+TEACUP v0.8 was developed as part of a project funded by Cisco 
+Systems and titled "Study in TCP Congestion Control Performance In 
+A Data Centre". This is a collaborative effort between CAIA and 
+Fred Baker of Cisco Systems.
+
+
+INTRODUCTION
+------------
+
+This README is for TEACUP Version 0.8.
+
+This README provides a brief overview on how to setup experiments.
+It ONLY discusses the most commonly used config options.
+
+For more details on how to setup experiments and the design of TEACUP
+please refer to the technical report: 
+http://caia.swin.edu.au/reports/150210A/CAIA-TR-150210A.pdf 
+
+There also is a technical report that provides a command reference for
+all fab tasks TEACUP provides:
+http://caia.swin.edu.au/reports/150210B/CAIA-TR-150210B.pdf
+
+
+TEACUP TESTBED
+--------------
+
+TEACUP makes some assumptions on the setup of the testbed and hosts. In order
+to use all of TEACUP's functions one needs to install a testbed as described
+brifefly in INSTALL and described in more detail in:
+http://caia.swin.edu.au/reports/150210C/CAIA-TR-150210C.pdf 
+
+A minimum setup for TEACUP does not require all the functionality
+described in CAIA-TR-150210C.pdf. The minimum setup is:
+- Two subnets separated by one router, with at least one host in each
+  subnet acting as traffic source/sink;
+- Hosts must run Linux, FreeBSD, Windows 7 or Mac OS X, the router must run
+  Linux (preferably) or FreeBSD;
+- Each host needs an extra network interface connected to a separate control 
+  network;
+- A control host that runs TEACUP to control the testbed via the control
+  network;
+- TCP logging tools for OS must be installed as explained in CAIA-TR-150210C.pdf;
+- Traffic generators must be installed as explained in CAIA-TR-150210C.pdf;
+- Support tools must be installed as explained in CAIA-TR-150210C.pdf, but
+  depending on the OS many of these are already installed by default.
+
+A multi-boot OS setup with PXE booting and power controllers as decribed in
+CAIA-TR-150210C.pdf is very useful but optional.
+
+
+CONFIG FILE
+-----------
+
+Copy config.py.example to config.pt in your experiment directory and modify
+it. The following discusses the most important options.
+
+1. Fabric configuration
+
+The following settings in the config file are Fabric settings. For a 
+more in-depth description refer to the Fabric documentation. All Fabric 
+settings are part of the Fabric env dictionary and hence Python variables 
+(and must adhere to the Python syntax).
+
+env.user = 'root'
+
+The user used for the SSH logins.
+
+env.password = 'rootpw'
+
+The password used for the SSH logins. This can be empty if public-key 
+authorisation is set up properly,
+
+2. Testbed configuration
+
+All settings start with the TPCONF_ prefix and are Python variables (and 
+must adhere to the Python syntax).
+
+TPCONF_script_path = '/home/<user>/src/teacup-0.8'
+sys.path.append(TPCONF_script_path)
+
+The path were the TEACUP scripts are located. This is appended to the Python 
+path (DO NOT remove the second line).
+
+TPCONF_router = [ 'testrouter', ]
+TPCONF_hosts = [ 'testhost1', 'testhost2', ]
+
+Two lists specify the testbed hosts. TPCONF_router specifies the list of 
+routers. Note that currently the TPCONF_router list is limited to only _one_ 
+router. TPCONF_hosts specifies the list of hosts. The hosts can be specified 
+as IP addresses or host names (just the names of fully qualified domain names).
+
+TPCONF_host_internal_ip = {
+        'testrouter' :  [ '172.16.10.1', '172.16.11.1' ],
+        'testhost1' : [ '172.16.10.2' ],
+        'testhost2' : [ '172.16.10.3' ],
+}
+
+This dictionary specifies the internal addresses / interfaces for each host. The 
+hosts (keys) specified must match the entries in the TPCONF_router and TPCONF_hosts 
+lists exactly. The current code does simple string matching, it
+does NOT attempt to resolve host identifiers in some canonical form.
+
+3. Experiment general settings
+
+now = datetime.datetime.today()
+TPCONF_test_id = now.strftime("%Y%m%d-%H%M%S") + '_experiment'
+
+TPCONF_test_id specifies the default test ID prefix. Note that if the test ID is 
+specified on the command line, the command line overrules this setting.
+
+TPCONF_host_os = {
+        'testrouter' : 'Linux',
+        'testhost1'  : 'FreeBSD',
+        'testhost2'  : 'Linux',
+}
+
+The TPCONF_host_os dictionary specifies which OS are booted on the different hosts. 
+The hosts (keys) specified must match the entries in the TPCONF_router and TPCONF_hosts 
+lists exactly. The current code does simple string matching, it does _not_ attempt to 
+resolve host identifiers in some canonical form.
+
+The three different types of OS supported are: Linux, FreeBSD and CYGWIN (Windows). 
+Selecting the specific Linux kernel to boot is not supported yet (the name of the 
+kernel is hard-coded).
+
+TPCONF_force_reboot = '1'
+
+If TPCONF_force_reboot is set to '1' _all_ hosts will be rebooted. If 
+TPCONF_force_reboot is set to '0' only hosts where the currently running OS is NOT the 
+desired OS (specified in TPCONF_host_os) will be rebooted.
+
+For the automatic OS selection to work, the testbed must have a PXE-based setup as
+described in http://caia.swin.edu.au/reports/150210C/CAIA-TR-150210C.pdf
+
+4. Experiment router queues
+
+TPCONF_router_queues = [
+        # This example sets same delay/loss for every host, and same delay/loss 
+        # in both directions
+        ( '1', " source='172.16.10.0/24', dest='172.16.11.0/24', delay=V_delay, "
+               "loss=V_loss, rate=V_up_rate, queue_disc=V_aqm, queue_size=V_bsize " ),
+        ( '2', " source='172.16.11.0/24', dest='172.16.10.0/24', delay=V_delay, "
+               "loss=V_loss, rate=V_down_rate, queue_disc=V_aqm, queue_size=V_bsize " ),
+]
+
+The TPCONF_router_queues specifies the router queues. Each entry is a 2-tuple. The 
+first value specifies a unique integer ID for each queue. The second value is a 
+comma-separated string specifying the queue parameters.
+
+The queues do not necessarily need to be defined in the order of queue ID but it is 
+recommended to do so.
+
+The following queue parameters exist:
+
+source: 
+Specifies the source IP / hostname or source network (<ip|hostname>[/<prefix>]) of 
+traffic that is queued in this queue. If a host name is specified there can be no prefix. 
+One can specify an internal/testbed or external/control IP/hostname. If an external 
+IP/hostname is specified this will be automatically translated into the first internal 
+IP specified for the host in TPCONF_host_internal_ip.
+
+dest:
+Specifies the destination IP / hostname or source network (<ip|hostname>[/<prefix>]) of 
+traffic that is queued in this queue. If a host name is specified there can be no prefix. 
+One can specify an internal/testbed or external/control IP/hostname. If an external 
+IP/hostname is specified this will be automatically translated into the first internal IP 
+specified for the host in TPCONF_host_internal_ip.
+
+delay:
+Specifies the emulated constant delay in milliseconds. For example, delay=50 sets the 
+delay to 50ms.
+
+loss:
+Specifies the emulated constant loss rate. For example, loss=0.01 sets the loss rate to 1%.
+
+rate:
+Specifies the rate limit of the queue. On Linux we can use units such as kbit or mbit. 
+For example, queue_size=1mbit sets the rate limit to 1 Mbit/second.
+
+queue_size:
+Specifies the size of the queue. On Linux queue size is usually defined in packets, 
+only for some queuing disciplines we can specify the size in bytes. For example, 
+queue_size=1000 sets the queue size to 1000 packets. On FreeBSD the queue size is also
+specified in packets typically, but one specify the size in bytes by adding a 'bytes' or 
+kbytes', for example queue_size=100kbytes specifies a queue of size 100kbytes. If 'bdp' is 
+specified the queue size will be set to the nominal bandwidth-delay-product (this does only 
+work for queuing disciplines where we know whether the queue limit is in bytes or packets).
+
+The minimum queue size is 1 packet (if the limit is specified in packets) or 2048bytes 
+(if the limit is specified in bytes).
+
+queue_disc:
+Specifies the queuing discipline. This can be the same of any of the queuing disciplines 
+supported by Linux, such as 'fq_codel', 'codel', 'red', 'choke', 'pfifo', 'pie' etc. On 
+FreeBSD the only queuing discipline available are 'fifo' and 'red'. For example, 
+queue_disc='fq_codel' sets the queuing discipline to the fair-queuing+codel model. For 
+compatibility, with FreeBSD on can specify 'fifo' on Linux, which is mapped to 'pfifo' 
+('pfifo' is the default for HTB classes, we use HTB for rate limiting). The queue_disc 
+parameter must be specified explicitly.
+
+queue_disc_params:
+This allows to pass parameters to queuing disciplines. For example, if we wanted to turn 
+ECN on for fq_codel we would specify queue_disc_params='ecn' (see fq_codel man page).
+
+bidir:
+This allows to specify whether a queue is unidirectional (set to '0') or bidirectional 
+(set to '1'). A unidirectional queue will only get the traffic from source to dest, 
+whereas a bidirectional queue will get the traffic from source to dest AND from dest 
+to source.
+
+All parameters must be assigned with either a constant value or an variable name 
+(V_<name>). Variable names must be defined in TPCONF_parameter_list and/or 
+TPCONF_variable_defaults. Variables are replaced with either the default
+value specified in TPCONF_variable_defaults or the current value from TPCONF_parameter_list 
+if we iterate through multiple values for the parameter.
+
+5. Experiment traffic generators
+
+Traffic generators are defined by the variable TPCONF_traffic_gens. This is a list of 
+3-tuples. The first value of a tuple is the start time relative to the start of the experiment. 
+The second value of the tuple is the a unique ID. The third value of the tuple is a string 
+containing the function name of the start function of the generator as first name followed 
+by the parameters.
+
+Client and server parameters can be external addresses or host names. An external address 
+or host name is replaced by the first internal address specified for a host in 
+TPCONF_host_internal_ip. Client and server parameters can also be internal addresses, which
+allows to specify any internal address existing.
+
+Each parameter is defined as <parameter_name>=<parameter_value>. Parameter names must be 
+the parameter names of traffic generator functions (and as such be valid Python variable 
+names). Parameter values can be either constants (string or numeric) or
+variables that are replaced by the actual values depending on the current experiment. These 
+variables must be named V_<name> and they must be defined in either TPCONF_parameter_list 
+or TPCONF_variable_defaults.
+
+The following shows a simple example. At time zero a web server is started and fake DASH 
+content is created. 0.5 seconds later a httperf client in DASH mode is started. The duration 
+and rate of the DASH-like flow are specified by variables, which can change for each experiment. 
+In contrast the cycle length and prefetch time are set to fixed values.
+
+TPCONF_traffic_gens = [
+        ( '0.0', '1', " start_http_server, server='testhost1', port=80 " ),
+        ( '0.0', '2', " create_http_dash_content, server='testhost1', duration=2*V_duration, "
+                      "rates=V_dash_rates, cycles='5, 10' " ),
+        ( '0.5', '3', " start_httperf_dash, client='testhost2', server='testhost1', port=80, "
+                      "duration=V_duration, rate=V_dash_rate, cycle=5, prefetch=15 " ),
+
+TEACUP supports the following traffic generators:
+- TCP bulk transfer (iperf)
+- HTTP traffic (httperf)
+- TCP video streaming (httperf)
+- Incast traffic (one querier, N responders) (httperf)
+- ping
+- UDP (iperf)
+- VoIP-like (fixed packet sizes and interval) (nttcp)
+
+Available traffic generators and their parameters are described in:
+http://caia.swin.edu.au/reports/150210A/CAIA-TR-150210A.pdf
+
+6. Experiment variables
+
+There are two types of variables: singulars and lists. Singulars are fixed parameters
+while lists specify the different values used in subsequent experiments based on the 
+definitions of TPCONF_parameter_list and TPCONF_vary_parameters (see below).
+
+TPCONF_duration = 30
+
+The duration of the experiment in seconds (must be an integer).
+
+TPCONF_runs = 1
+
+The number of runs carried out for each unique parameter combination.
+
+TPCONF_TCP_algos = [ 'newreno', 'cubic', 'htcp', ]
+
+The TCP congestion algorithms used. The following algorithms can be selected: 'newreno', 
+'cubic',  'htcp', 'cdg', 'compound'. However, only some of these are supported depending 
+on the OS a host is running:
+Windows: newreno (default), compound
+FreeBSD: newreno (default), cubic, htcp, cdg
+Linux: cubic (default), newreno, htcp
+
+Instead of specifying a particular TCP algorithm one can specify 'default'. This will 
+set the  algorithm to the default algorithm depending on the OS the host is running (see 
+above).
+
+Using only TPCONF_TCP_algos one is limited to either using the same algorithm on all hosts or 
+the defaults. To run different algorithms on different hosts, one can specify 'host<N>' where 
+<N> is an integer number starting from 0. The <N> refers to the N-th entry for each host in 
+TPCONF_host_TCP_algos.
+
+TPCONF_host_TCP_algos = {
+        'testhost1' : [ 'default', 'newreno', ],
+        'testhost2' : [ 'default', 'newreno', ],
+}
+
+This defines the TCP congestion control algorithms used for each host if the 'host<N>' 
+definitions are used in TPCONF_TCP_algos. In the above example a 'host0' entry in 
+TPCONF_TCP_algos will lead to each host using its default. A 'host1' entry will set
+both hosts to use 'newreno'. 
+
+TPCONF_delays = [ 0, 25, 50, 100 ]
+
+The emulated delays in milliseconds.
+
+TPCONF_loss_rates = [ 0, 0.001, 0.01 ]
+
+The emulated loss rates. The numbers must be between 0.0 and 1.0.
+
+TPCONF_bandwidths = [
+        (  '8mbit', '1mbit'   ),
+        ( '20mbit', '1.4mbit' ),
+]
+
+The emulated bandwidths as 2-tuples. The first value in each tuple is the downstream 
+rate and the second value in each tuple is the upstream rate. Note that the values are 
+passed through to the router queues and are not parsed. Units can be used if the queue setup 
+allows this, e.g. above we use mbit to specify Mbits/second which Linux tc framework allows 
+us to do.
+
+TPCONF_aqms = [ 'pfifo', 'fq_codel', 'pie' ]
+
+The list of AQM/queuing techniques. This is completely dependent on the router OS. Linux 
+supports  'pfifo', 'bfifo', 'fq_codel', 'codel', 'pie', 'red', ... (see tc man page for full 
+list). FreeBSD support only 'fifo' and 'red'. Default on Linux and FreeBSD are FIFOs.
+
+TPCONF_buffer_sizes = [ 100, 200 ]
+
+If router is Linux this is mostly in packets/slots, but it depends on AQM (e.g. for bfifo 
+it's  bytes). If the router is FreeBSD this would be in slots by default, but we can specify 
+byte sizes (e.g. we can specify 4Kbytes).
+
+TPCONF_vary_parameters = [ 'tcpalgos', 'delays', 'loss', 'bandwidths', 'aqms', 'bsizes', 
+     'runs', ]
+
+This specifies this list of parameters we vary, i.e. parameters that have multiple values. 
+These parameter must be defined in TPCONF_parameter_list. The total number of experiments 
+carried out is the number of unique parameter combinations multiplied by the number of 
+TPCONF_runs if 'runs' is specified here. This is also the order of the parameters in the 
+file names. While not strictly necessary 'runs' should be last in the list (if used). If 
+'runs' is not specified there is a single experiment for each parameter combination.
+
+TPCONF_vary_parameters is only used for multiple experiments, i.e. 
+'fab run_experiment_multiple' (see below). When we run 'fab run_experiment_single' all 
+the variables are set to fixed values based on TPCONF_variable_defaults. 
+TPCONF_parameter_list specifies the variable parameters.
+
+TPCONF_variable_defaults and TPCONF_parameter_list are explained in detail in:
+http://caia.swin.edu.au/reports/150210A/CAIA-TR-150210A.pdf
+
+7. Example with two variables
+
+Let's discuss a simple example where we vary delay and TCP algorithms. Assume we want to 
+experiment with two delay settings and two different TCP CC algorithms. So we have:
+
+TPCONF_delays = [ 0, 50 ]
+TPCONF_TCP_algos = [ 'newreno', 'cubic' ]
+
+We also need to specify the two parameters to be varied :
+
+TPCONF_parameter_list = {
+        'delays'        :  ( [ 'V_delay' ],        [ 'del' ],    TPCONF_delays,        {} ),
+        'tcpalgos'      :  ( [ 'V_tcp_cc_algo' ],  [ 'tcp' ],    TPCONF_TCP_algos,     {} ),
+ 	OTHERS OMITTED	
+
+TPCONF_vary_parameters = [ 'delays', 'tcpalgos' ]
+
+V_delay can then be used in the router queue settings. V_tcp_cc_algo is passed to the host setup 
+function. When we run 'fab run_experiment_multiple' this will run the following experiments, 
+here represented by the start of the log file names. (We assume the test ID prefix is the 
+default and the experiment was run on the 6th of Dec 2014.)
+
+20141206-170846_experiment_del_0_tcp_newreno
+20141206-170846_experiment_del_0_tcp_cubic
+20141206-170846_experiment_del_50_tcp_newreno
+20141206-170846_experiment_del_50_tcp_cubic
+
+
+RUNNING EXPERIMENTS
+-------------------
+
+First you should create a new directory for the experiment of series of experiments. Copy 
+fabfile.py and run.sh into the directory. Then create a config.py in the directory. An easy 
+way to get a config.py file is to start with the provided example config config.py example 
+as basis. Modify the config file as necessary.
+
+There are two tasks to start experiments:
+- run_experiment_single
+- run_experiment_multiple
+
+To run a single experiment with a test ID prefix , type:
+
+> fab run_experiment_single
+
+To run a series of experiment based on the TPCONF_vary_parameters setting, type:
+
+> fab run_experiment_multiple
+
+In both cases the Fabric output will be printed out on the current terminal and it can be 
+redirected with the usual means.
+
+The default test ID prefix is TPCONF_test_id specified in the config file. The test ID can 
+also be specified on the command line (overruling the config setting):
+
+> fab run_experiment_multiple:test_id=`date +"%Y%m%d-%H%M%S"`_experiment
+
+This will set the test ID prefix to YYYYMMDD-HHMMSS_experiment using the date when the 
+command is run.
+
+For convenience the run.sh shell exists. The shell logs the Fabric output in a 
+<test_ID_prefix>.log file and is started with:
+
+> run.sh
+
+This script generates a test ID prefix and then executes the following command:
+
+fab fabfile.py run_experiment_multiple:test_id=<test_ID_prefix> > <test_ID_prefix>.log 2>&1
+
+<test_ID_prefix> is set to `date +"%Y%m%d-%H%M%S"`_experiment. The output is unbuffered, so 
+one can use tail -f on the log file and get timely output.
+
+The fabfile to be used can be specified, i.e. to use the fabfile myfabfile.py instead of 
+fabfile.py run:
+
+> run.sh myfabfile.py
+
+The run_experiment tasks keeps track of experiment run using two files in the current 
+experiment directory:
+- experiment_started.txt logs the test ID prefixes of all experiments started
+- experiment_completed.txt logs the test ID prefixes of all experiments successfully 
+  completed 
+
+
+ANALYSIS OF EXPERIMENT DATA
+---------------------------
+
+TEACUP has a number of tasks for the analysis of experiment results. These are described 
+in: http://caia.swin.edu.au/reports/150210A/CAIA-TR-150210A.pdf
+
+Currently analysis functions exist for:
+- Plotting throughput including all header bytes (from tcpdump data)
+- Plotting RTT with SPP (from tcpdump data)
+- Plotting TCP CWND (from SIFTR and Web10G data)
+- Plotting TCP RTT estimate (from SIFTR and Web10G data)
+  - smoothed estimate
+  - unsmoothed estimate (also for SIFTR this is the improved ERTT estimate)
+- Plotting video streaming goodput (from httperf data)
+- Plotting response times for incast scenario (from httperf data)
+- Plotting TCP statistic over time (from SIFTR and Web10G data)
+
+The easiest way to generate all graphs for all experiments is to run the following command 
+in the directory containing the experiment data:
+
+> fab analyse_all
+
+This will generate results for all experiment listed in the file experiments_completed.txt. 
+By default the TCP RTT graphs generated are for the smoothed RTT estimates and in case of 
+SIFTR this does not show the ERTT estimates.
+
+The analysis can be run for a only single experiment by specifying the test ID. The 
+following command generates all graphs for the experiment 
+20131206-102931_experiment_dash_2000_tcp_newreno:
+
+> fab analyse_all:test_id=20131206-102931_experiment_dash_2000_tcp_newreno
+
+To generate a particular graph for a particular experiment one can use a specific analysis 
+function together with a test ID. For example, the following command only generates the 
+TCP RTT graph for the non-smoothed estimates:
+
+> fab analyse_tcp_rtt:test_id=20131206-102931_experiment_dash_2000_tcp_newreno,smoothed=0
+
+The analyse_cmpexp allows to plot the metrics 'throughput', 'spprtt' and 'tcprtt'  
+depending on the different experiments for different selected flows. analyse_cmpexp can 
+show the metric distribution as boxplots (default), or plot mean or median.
+
+The following command shows an example, where we plot tcprtt as boxplots:
+fab analyse_cmpexp:exp_list=myexp_list.txt,res_dir="./results/",variables="run\=0",
+source_filter="D_172.16.10.2_5001;D_172.16.10.3_5006",metric=tcprtt,
+lnames="CDG;Newreno"
+
+More examples and a detailed description of the analysis tasks and their parameters 
+is in:
+http://caia.swin.edu.au/reports/150210A/CAIA-TR-150210A.pdf
+http://caia.swin.edu.au/reports/150210B/CAIA-TR-150210B.pdf
+
+
+UTILITY FUNCTIONS
+-----------------
+
+1. List all available tasks
+
+> fab -l
+
+2. Execute commands on testbed hosts
+
+The exec_cmd task can be used to execute one cmd on multiple hosts. For example, 
+the following command executes the command 'uname -s' on a number of hosts
+
+> fab -H testhost1,testhost2,testhost3,testhost4 exec_cmd:cmd="uname -s"
+
+If no hosts are specified on the command line, the command is specified on all hosts 
+listed in the config file (the union of TPCONF_router and TPCONF_hosts). For example, 
+the following command is executed on all testbed hosts:
+testbed hosts:
+
+> fab exec_cmd:cmd="uname -s"
+
+3. Deploy files on testbed hosts
+
+The copy_file task can be used to copy a local file to testbed hosts. For example, 
+the following command copies the web10g-logger executable to all testbed hosts 
+(except the router). This assumes all the hosts run Linux.
+
+> fab -H testhost1,testhost2,testhost3,testhost4 copy_file:
+  file_name=/usr/local/bin/web10g-logger,remote_path=/usr/bin
+
+If no hosts are specified on the command line, the command is specified on all hosts 
+listed in the config file (the union of TPCONF_router and TPCONF_hosts). For example, 
+the following command is executed on all testbed hosts:
+
+> fab copy_file:file_name=/usr/local/bin/web10g-logger,remote_path=/usr/bin
+
+4. Check testbed hosts
+
+The check_host command can be used to check if the required software is installed 
+on all hosts. For example, the following command checks all testbed hosts:
+
+> fab -H testhost1,testhost2,testhost3,testhost4 check_host 
+
+Note: the task only checks for the presence of necessary tools, but not if the tools 
+actually work
+
+5. Check testbed host connectivity
+
+The check_connectivity task can be used to check connectivity between all testbed 
+hosts. For example, the following command checks whether each host can reach each 
+other host in the testbed network:
+
+> fab -H testhost1,testhost2,testhost3,testhost4 check_connectivity
+
+Note: this only checks the connectivity of the internal testbed network, not 
+reachability of hosts on their control interface.
+
+6. Check TEACUP configuration
+
+The check_config task can be used to check if there are any errors in the 
+configuration:
+
+> fab check_config
+
+
+COPYRIGHT
+---------
+
+Copyright (c) 2013-2015 Centre for Advanced Internet Architectures,
+Swinburne University of Technology. All rights reserved.
+
+Author: Sebastian Zander (szander@swin.edu.au)
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.

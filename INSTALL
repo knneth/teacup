@@ -1,0 +1,261 @@
+TEACUP (TCP Experiment Automation Controlled Using Python) INSTALL
+==================================================================
+
+$Id: INSTALL 982 2015-02-13 00:56:04Z szander $
+
+ACKNOWLEDGMENTS
+---------------
+
+TEACUP v0.8 was developed as part of a project funded by Cisco 
+Systems and titled "Study in TCP Congestion Control Performance In 
+A Data Centre". This is a collaborative effort between CAIA and 
+Fred Baker of Cisco Systems.
+
+
+OVERVIEW
+--------
+
+TEACUP assumes a testbed setup as described in the tech report: 
+http://caia.swin.edu.au/reports/150210C/CAIA-TR-150210C.pdf
+
+The testbed has two subnets that are separated by one router, with at 
+least one host in each subnet acting as traffic source and/or sink. The 
+hosts must run Linux, FreeBSD, Windows 7 or Mac OS X, and the router 
+must run Linux (preferably) or FreeBSD.
+
+Each host needs an extra network interface connected to a separate 
+control network. Also, one needs a separate host (control host) that 
+runs TEACUP to control the testbed hosts (experimental hosts) via 
+the control network.
+
+On the control host you need to install Python, the Python Fabric
+toolkit and TEACUP. To run the analysis functions and produce graphs 
+you also need to install R. The tool pdfjam is needed for some shell
+scripts provided to combine multiple pdf graphs on one page. To plot
+RTT graphs based on tcpdump files the SPP tool must be installed.
+TEACUP also uses a number of tools that are usually installed by default 
+on a FreeBSD or Linux system, such as ping, kill and dd. We strongly 
+recommend to run Linux or FreeBSD on the control host, as so far TEACUP 
+has only been tested on FreeBSD or Linux.
+
+On the experimental hosts you need to install several tools for traffic 
+generation: a modified iperf, a modified httperf and a modified nttcp. 
+Furthermore, you need to install software for the logging of TCP state
+information. TEACUP also uses a number of tools that are usually 
+installed by default on a FreeBSD, Mac OS X or Linux system, such as 
+ping, kill and dd. The required tools are described in:
+http://caia.swin.edu.au/reports/150210C/CAIA-TR-150210C.pdf 
+
+IF you want to run experiments with Windows you need to install 
+Cygwin with the following packages: cygrunsrv, openssh, wget, procps, 
+psmisc, make, autoconf, automake, gcc, lighttpd, openssh, pcre-devel, 
+patch. This will allow you to build the traffic generators, provide
+SSH remote access TEACUP needs and also provide all other tools 
+TEACUP needs. You can download Cygwin from https://www.cygwin.com/.
+Follow the provided instructions to install it. Also this is described
+in more detail in:
+http://caia.swin.edu.au/reports/150210C/CAIA-TR-150210C.pdf 
+
+TEACUP can use a multi-boot OS setup on the experimental hosts and reboot
+the hosts into the desired OS automatically before starting experiments.
+This requires a specific setup (including PXE booting) as described in
+http://caia.swin.edu.au/reports/150210C/CAIA-TR-150210C.pdf. While
+such a multi-boot OS setup is very useful, it is entirely optional.
+TEACUP also works with hosts that only run a single OS. TEACUP can use 
+power controllers to automatically power cycle hosts, but this is also 
+an optional feature
+
+
+INSTALL R AND PDFJAM
+--------------------
+
+These are needed on the control host for plotting graphs.
+
+Install R using your package management tools or download R from
+http://www.r-project.org/ and follow the installation instructions from
+this web site.
+
+Install pdfjam using your package management tools.
+
+
+INSTALL SPP
+-----------
+
+SPP is needed on the control host to plot RTT figures.
+
+SPP is a tool that computes RTT estimates based on tcpdump files collected
+at both ends of a path. Download the latest version of SPP from
+http://caia.swin.edu.au/tools/spp/ and follow the instructions
+provided in the tarball to install it. 
+
+
+INSTALL FABRIC
+--------------
+
+TEACUP is based on Fabric (hhtp://docs.fabfile.org).
+
+Log in as root.
+
+Install Python 2.7 with your package management tools. Python 2.6 may
+work but is not recommended.
+
+Install pip:
+
+On FreeBSD you can use portmaster:
+> portmaster devel/py-pip
+
+On Linux use your package manager, e.g. on OpenSUSE you can use zypper:
+> zypper install python-pip
+
+Install Fabric:
+> pip install fabric
+
+Upgrade an existing Fabric:
+> pip install --upgrade fabric
+
+Test if Fabric works:
+> fab --version
+Fabric 1.8.0
+Paramiko 1.12.0
+
+If Fabric is installed correctly it will print out the version info as shown
+above.
+
+
+INSTALL TEACUP SCRIPTS 
+----------------------
+
+Unpack the archive:
+> cd /home/user
+> tar -xvzf teacup-<version>.tar.gz
+
+This will create a directory /home/user/teacup-<version> with all the scripts.
+In the following we will refer to this directory as <teacup_dir>.
+
+Create a directory for an experiment:
+> mkdir -p /home/user/experiment/
+
+Each experiment needs a config.py script. Start with a copy of the example
+config file, for example:
+> cp <teacup_dir>/example_configs/config-scenario1.py /home/user/experiment/config.py
+
+Also copy the run.sh file:
+> cp <teacup_dir>/run.sh /home/user/experiment/
+
+For convenience or if fabfile.py should be modified for an experiment it should 
+also be copied:
+> cp <teacup_dir>/fabfile.py /home/user/experiment/
+
+Edit /home/user/experiment/config.py and change the TPCONF_script_path
+variable at the top to the location of the scripts, e.g. /home/user/teacup-0.6
+Modify TPCONF_router, TPCONF_hosts and TPCONF_host_internal_ip based on the
+hosts used for the experiment. Set env.user and env.password to the superuser
+and superuser password.
+ 
+Edit /home/user/experiment/config.py to change the experiment settings 
+as required.
+
+Before running an actual experiment, you can check that the config file has 
+no errors (this is also done automatically by TEACUP as first step though):
+> fab check_config
+
+Without fabfile.py in the experiment directory start an experiment like this:
+> run.sh /home/user/teacup-0.6/fabfile.py
+
+Or you can start an experiment with fab directly:
+> PYTHONPATH=. fab -f /home/user/teacup-0.6/fabfile.py run_experiment_single
+
+Instead of running a whole experiment one can run single tasks, e.g. to check
+if all tools are installed on hosts 192.168.1.2 and 192.168.1.3 run:
+> PYTHONPATH=. fab -f /home/user/teacup-0.6/fabfile.py -H 192.168.1.2,192.168.1.3 check_host
+
+To see the list of available tasks, run:
+> fab -f /home/user/teacup-0.6/fabfile.py -l
+
+With fabfile.py in the experiment directory we don't need to specify the path. The above
+commands simplify to:
+> run.sh
+> fab run_experiment_single 
+> fab -H 192.168.1.2,192.168.1.3 check_host
+> fab -l
+
+
+INSTALL TRAFFIC GENERATOR TOOLS
+-------------------------------
+
+These are needed on the experiment hosts.
+
+Install iperf, httperf and nttcp from the packages provided in the TEACUP tarball.
+Refer to the documentation of these tools on how to install them.
+
+
+INSTALL TCP LOGGERS
+-------------------
+
+These are needed on the experiment hosts. Which tools are needed depends on the OS(s)
+installed on the experiment hosts.
+
+Linux
+-----
+
+On Linux you need to install web10g. Download web10g from http://www.web10g.org/ and
+follow the instructions provided to install a patched Linux kernel and the web10g
+userland tools. If you use web10g version 2.0.8 or higher nothing else is required. If
+you use web10g version 2.0.7 you must patch the userland code with the patch provided
+in the TEACUP tarball (web10g-logger-0.1-web10g-2.0.7.patch) and then compile and install
+the userland code.  
+
+You must use web10g version 2.0.7 or newer, TEACUP does not work with older web10g 
+versions.
+
+FreeBSD
+-------
+
+You must use FreeBSD 8.2 or newer, where SIFTR is part of the kernel. You must patch the 
+SIFTR kernel module with the patch provided in the TEACUP tarball 
+(freebsd_siftr_ertt_patch.tar.gz), rebuild and install it. Instructions on how to patch 
+SIFTR are provided in the freebsd_siftr_ertt_patch.tar.gz tarball.
+
+Windows 7
+---------
+
+Install the Windows TCP EStats Logger provided in the TEACUP tarball 
+(win-estats-logger-0.1.zip). Follow the instructions provided in the README file 
+inside the zip archive.
+
+Mac OS X
+--------
+
+Install the SIFTR-like logger for Mac OS X provided in the TEACUP tarball 
+(dsiftr-osx-0.1.zip). Follow the instructions in the README file inside the zip archive.
+
+
+COPYRIGHT
+---------
+
+Copyright (c) 2013-2015 Centre for Advanced Internet Architectures,
+Swinburne University of Technology. All rights reserved.
+
+Author: Sebastian Zander (szander@swin.edu.au)
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+1. Redistributions of source code must retain the above copyright
+   notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright
+   notice, this list of conditions and the following disclaimer in the
+   documentation and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+SUCH DAMAGE.
+

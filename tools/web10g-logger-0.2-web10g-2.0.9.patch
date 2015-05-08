@@ -1,0 +1,34 @@
+--- web10g-userland-2.0.9/util/C/web10g-logger.c	2014-10-02 07:58:51.000000000 +1000
++++ web10g-userland-2.0.9-mod/util/C/web10g-logger.c	2015-02-02 15:09:51.621076872 +1100
+@@ -84,6 +84,8 @@
+ 	unsigned int interval = 1000;
+ 	char exclude_ip[64];
+ 
++	int names_printed = 0;
++
+ 	for (i = 0; i < MAX_TABLE; i++) {
+ 		mask.if_mask[i] = 0;
+ 	}
+@@ -173,6 +175,22 @@
+ 
+ 			if (strcmp(exclude_ip, asc.local_addr) == 0 || strcmp(exclude_ip, asc.rem_addr) == 0)
+ 				continue;
++
++			if (!names_printed) {
++				printf("Timestamp,CID,LocalAddress,LocalPort,RemAddress,RemPort,");
++ 				for (i = 0; i < data->length; i++) {
++					if (data->val[i].masked) continue;
++
++					printf("%s", estats_var_array[i].name);
++
++					if (i < data->length - 1) {
++                                        	printf(",");
++                                	}
++				}
++				printf("\n");
++
++				names_printed++;
++			}
+ 			
+ 			printf("%u.%06u,", data->tv.sec, data->tv.usec);
+ 			printf("%s,%s,%s,%s,%s,", asc.cid, asc.local_addr, asc.local_port, asc.rem_addr, asc.rem_port);

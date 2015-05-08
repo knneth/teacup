@@ -1,0 +1,40 @@
+#!/bin/sh
+# generate 'video content' with various on/off periods and various bitrates
+
+# on/off period length in seconds
+PERIODS="@PERIODS@"
+
+# bitrates in kpbs
+BRATES="@BRATES@"
+
+# video duration in seconds
+DURATION="@DURATION@"
+
+for P in $PERIODS; do
+	for R in $BRATES; do
+		mkdir -p video_files-${P}-${R}
+
+		if [ ! -e video_files-${P}-${R}/0 ] ; then
+			# generate file for prefetch (assume max of 60 seconds)
+                	PREFETCH_SIZE=`echo "60 ${R}" | awk '{ printf("%.0f", $1 * $2 * 1000 / 8) }'`
+                	dd if=/dev/zero of=video_files-${P}-${R}/0 bs=${PREFETCH_SIZE} count=1 2> /dev/null;
+		fi
+
+		if [ -e video_files-${P}-${R}/1 ] ; then	
+			SIZE=`ls -l video_files-${P}-${R}/1 | awk '{ print $5 }'`
+		else
+			SIZE=-1
+		fi
+
+		# chunk size in bytes 
+		CHUNK_SIZE=`echo "${P} ${R}" | awk '{ printf("%.0f", $1 * $2 * 1000 / 8) }'`
+		if [ ${CHUNK_SIZE} -ne ${SIZE} ] ; then
+			# number of chunks
+			CHUNK_CNT=`echo "${P} ${DURATION}" | awk '{ printf("%.0f", $2 / $1 ) }'`
+			for J in `seq 1 $CHUNK_CNT`; do
+				dd if=/dev/zero of=video_files-${P}-${R}/${J} bs=${CHUNK_SIZE} count=1 2> /dev/null; 
+			done;
+		fi;
+	done;
+done;
+

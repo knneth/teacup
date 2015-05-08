@@ -1,0 +1,320 @@
+Version 0.8.1 (20th February 2015)
+----------------------------------
+- fixed abort if TPCONF_host_os has entry with host not actually used for
+  experiment
+- fixed bug in toplogy configuration if TPCONF_topology_switch_port_offset
+  is undefined
+- fixed broken TPCONF_bc_ping_enable 
+- added start_httperf_incast_n traffic generator. This will start all the
+  servers, create all the content and start the querier. It has the union
+  set of parameters of start_http_server, generate_incast_content and
+  start_httperf_incast plus the new parameter num_responders. The new
+  parameter makes it possible to vary the number of responders.
+- added analyse_2d_density function to plot 2d density or ellipses
+- increased timeout for ssh connection used to configure switch
+- restructured init_topology, so the switch configuration is performed
+  serially (host by host) but the NIC/route configuration of the hosts is
+  performed in parallel (all hosts at the same time)
+- all the file finding functions (analyse) do follow symlinks now
+- added cwnd and tcpstat metrics for analyse_cmpexp and analyse_2d_density
+- separated analyse_ackseq into extract_ackseq and analyse_ackseq
+- fixed adding trailing slash for analyse_cmpexp and analyse_2d_density
+- fixed type bug in plot_incast_ACK_series, when sburst was passed as
+  string
+- fixed crash in web10g version guess when no web10g log files present
+  (e.g. only SIFTR logs)
+- Fixed bug when aggregating plot data with datasets that have more than
+  two columns
+
+Version 0.8 (February 2015)
+---------------------------
+- added parameter plot_script to all analyse tasks. This
+  parameter allows to specify the script used for plotting. This 
+  means one can implement custom plot scripts for different publications and then
+  tell TEACUP which to use. If one uses a modified R script the syntax is as 
+  follows: plot_script="R CMD BATCH --vanilla /home/test/my_plot_time_series.R" 
+  The script (or R interpreter in the case of R) is called with one parameter,
+  which is the path of a plot log file (the file is automatically removed
+  however if TPCONF_debug_level = 0) 
+- added parameter plot_params to all analyse_ tasks. The string assigned to this
+  variable is passed unchanged to the R plot function, so this can be used to
+  override parameters such as YLAB and YSCALER. Note that since goes through
+  Fabric equal signs and quotes need to be escaped with backslash on the command
+  line.
+- added a killing of all processes at the end of an experiment, to cleanup
+  after experiment. still we also do this at the start as it is never
+  guaranteed that a previous experiment terminated properly
+- added check for duplicate values in vary parameters to prevent later
+  crash in this case
+- fixed unsmoothed RTT for web10g version 2.0.9 
+- number of columns in legend is now set to <3 if <3 categories to avoid
+  excessive white space
+- changed default IP for tftpserver
+- added support for Serverlink SLP-SPP1008 power controller
+- added config option TPCONF_power_ctrl_type to select type of power
+  controller
+- added task for initial setup of hosts (not included in public release)
+- Added automatic topology config first version. Set TPCONF_config_topology 
+  to '1' to enable. If enabled it will set the IPs configures in
+  TPCONF_host_internal_ip on the testbed network interfaces and move 
+  host into the right VLAN by changing the port configuration on the
+  switch (only tested on Dell switch).
+- init_os will now expand the OS list if OS list shorter than number of
+  hosts by cloning the last entry in list. Allows to reboot several machines
+  into same OS specifying it only once
+- you can now specify 'running' or 'current' for TPCONF_linux_kern_router
+  or TPCONF_linux_kern_hosts. Specifying this means use the currently running
+  kernel. You can only use this if machines already run Linux, otherwise it
+  has no effect! 
+- added environment variable POINT_SIZE to control the point size on
+  plots (default = 0.5)
+- added TPCONF_os_partition to define the partition from which to boot the
+  different OS in the config file
+- all pxe boot and power control options can now be omitted from the
+  config file 
+- modified point thinning function. now checks x-axis and y-axis distance 
+  separately. PTHIN_DIST_FAC defines the minimum absolute distance on x-axis 
+  (PTHIN_DIST_FAC*XRANGE) or y-axis (PTHIN_DIST_FAC*YRANGE) point needs to have
+  to previous point to be plotted. Alternatively, PTHIN_DIST can be used to 
+  specify an absolute distance for backwards compatibility (however the result may
+  vary slightly from the previous behaviour).
+- added checking of host names and OS names in TPCONF_host_os. Host names
+  must be names specified in TPCONF_router or TPCONF_hosts.
+- TFTP server can now be configured in config.py via TPCONF_tftpserver and
+  TFTP server can now be specified when running init_os with the tftp_server
+  parameter.
+- Fixed check if Linux kernel is correct after reboot
+- added TPCONF_topology_switch, TPCONF_topology_switch_port_prefix and
+  TPCONF_topology_switch_port_offset config parameters to control switch
+  port prefix and port offset parameters for topology configuration
+
+Version 0.7 (November 2014)
+---------------------------
+- Added TPCONF_debug_level config file variable to specify the level of
+  debugging output. Setting it to 0 means no debugging output while setting
+  it to 1 or higher means more and more debugging output. Currently only
+  used to determine if .Rout files are created (level 1+) or not. 
+- Added functionality for optional broadcast/multicast ping  on control
+  interfaces. The pings are received by all hosts and logged by tcpdump. 
+  They can be used later to compute the time offsets between hosts.
+  The new variable TPCONF_bc_ping_enable enables the sending of the pings
+  and the tcpdumps on all hosts if set to '1'.
+- The new variable TPCONF_bc_ping_rate allows to control the rate of the
+  broadcast pings. By default the rate 1 ping per second.
+- The new variable TPCONF_bc_ping_address allows to define a multicast
+  group to which the pings are sent. If this variable is not specified
+  or it is empty, the pings will be broadcasted to the control networks
+  broadcast address. 
+- Added get_clock_offsets task. Can be used to generate files with all
+  hosts clock offsets over time relative to one host (which by default
+  is the router. The file name is <test ID>_clock_offsets.txt 
+  Requires tcpdumps with the broadcast pings captured on control
+  interfaces.
+- Added ts_correct parameter for analyse_all, analyse_dash_goodput, 
+  analyse_cmpexp, analyse_cwnd, analyse_throughput, analyse_rtt, 
+  analyse_tcp_rtt, analyse_tcp_stat. If set to '1' functions will
+  plot data with timestamps corrected according to the clock offset
+  data. By default this is set to '0' and hence disabled.
+- Removed any nslookup from code, all lookups are now done on
+  control host with Python gethostbyname
+- Added support for running proper NTP on Windows instead of the
+  Windows time service (mainly logging using ntpq)
+- Added task analyse_incast() to plot response time for incast experiments
+  over time and as distributions (boxplots). The task has the standard
+  parameters plus two new parameters. If boxplot is set to '1' instead
+  of separate lines for each flow, all flows for one experiment are
+  plotted as distribution/boxplot (by default this is '0'). If slowest_only
+  is set to '1' instead of separate lines for each flow it will print
+  the slowest response time for each point in time for all flows of
+  one experiment (but one slowest line for each experiment).
+- Added parameter io_filter for analyse_cwnd, analyse_tcp_rtt, 
+  analyse_tcp_stat and analyse_all. Allows to specify whether TCP statistics 
+  are plotted based on incoming ('i'), outgoing ('o') or incoming
+  and outgoing packets ('io'). The default is 'io'. The parameters is
+  only effective for FreeBSD/SIFTR log files, it does nothing for web10g
+  log files. Also, the parameter only takes effect if replot_only='0'.
+- Various changes to support Mac OX X
+- Added TPCONF_web10g_poll_interval variable to control the web10g
+  poll interval (Linux and Windows). The interval is specified in
+  milliseconds. The default value is 10ms. The minimum value is 1ms.
+  The maximum value is 1 second.
+  Note that with small intervals, the actual interval is not very accurate
+  and likely to be significantly larger than the specified value. 
+  Note: It is unclear if Windows can do <10ms intervals.
+- For all analyse tasks, if replot_only=1 data files are now generated
+  if they do not exist yet (but if they already exist they are not 
+  regenerated as before). If replot_only=0 then all data files are 
+  generated as before. 
+- added out_dir parameter for get_clock_offsets
+
+Version 0.6 (9 September 2014)
+-------------------
+- Added environment variable to control the point thinning for plot.
+  Using PTHIN_DIST one can set the minimum distance between plotted
+  points. For example, PTHIN_DIST=0.25 means the minimum (euclidean) distance
+  between two points is 0.25.
+- Turned point thinning off by default to avoid missing something.
+  Previously it was enabled by default with distance=0.25, so the
+  previous default can be achieved setting PTHIN_DIST=0.25.
+- Implemented 'pdf_dir' parameter for analyse_cmpexp, analyse_all, analyse_cwnd, 
+  analyse_rtt, analyse_tcp_rtt, analyse_tcp_stat, analyse_throughput
+  that specifies the directory in which the PDF files (figures) are
+  created.
+- Implemented out_name and pdf_dir parameters for analyse_dash_goodput
+- Fixed bug that caused wlog, lighttpd.conf and generate_http_*_content.sh
+  files to be created the fabfile directory instead of in the experiment 
+  sub directories.
+- Implemented ymin, ymax, stime, etime parameters for analyse_dash_goodput
+- pdf_dir is now relative to the experiment directory
+- dash_log_list can now be list of only the file names without path info,
+  analyse_dash_goodput will find the full path names itself
+- Added NO_NOMINAL environment variable for plot_dash_goodput, if set
+  to 1 the nominal goodput won't be plotted
+- source_filter can now handle wildcard character '*' instead of port
+  number; this means filter only source/destination X with any port number
+- added parameter 'method' to copy_file. Can be set to put (use Fabric put
+  to copy or scp (use scp to copy). scp is faster, but requires password
+  input if no public key authentication is configured
+- added stime and etime parameters for analyse_cmpexp, so we can plot
+  distributions for specified time windows, instead of over whole experiments
+- out_name parameter for analyse_cmpexp now also allows to specify the 
+  file name prefix (consistent with out_name for other functions);
+  previously it changed some middle part of the file name
+
+Version 0.5 (1 July 2014)
+-------------------------
+- Now do clock sync check after all other sanity checks (check_time_sync)
+- Linux kernel to boot is now configurable via the config file.
+  TPCONF_linux_kern_router specifies the kernel on the router, 
+  TPCONF_linux_kern_hosts specifies the kernel on all other hosts.
+  The name is the kernel image name minus the starting vmlinuz-, e.g.
+  TPCONF_linux_kern_router = '3.14.5-vanilla-10000hz'
+  TPCONF_linux_kern_hosts = '3.9.8-desktop-web10g'
+- Maximum allowed time difference between machines in seconds can be
+  configured now, e.g. TPCONF_max_time_diff = 1
+- Added a parameter link_len for analyse_throughput and analyse_all tasks.
+  If set to '0' (default) throughput is based on IP-layer length, if set to
+  '1' throughput is based on link-layer length. Note that bandwidths limits
+  specified on router are link-layer limits.
+- Added parameter 'kill' to start_iperf(). By default this is '0'
+  and iperf client will terminate after duration seconds. If this is set to
+  '1' iperf client will be killed approx. 1 second after duration (this
+  is to work around a "feature" in iperf that prevents it from stopping after
+  the specified duration). To really shut iperf up, the iperf server is also
+  killed approx. 2 seconds after duration.
+- Force a start and resync of the Windows NTP client in sanity checks
+- Increased delay after reboot to 30 seconds (XXX make configurable?)
+- Fixed bug that configured Win7 to use the default TCP instead of Compound 
+  when ECN=0. Now 'compound' selects Compound TCP and 'newreno' selects the
+  default TCP fow Win7.
+- For Windows hosts always try to enable test network interfaces in test_host(), 
+  so they are up for the connectivity check
+- Disable TCP window scaling heuristics for Windows
+- Enable TCP timestamps for Windows
+- Added stime and etime parameters for analyse_all, analyse_cwnd,
+  analyse_rtt, analyse_tcp_rtt, analyse_tcp_stat, analyse_throughput.
+  stime defines the start time of the period of interest to plot relative to
+  the experiment start time (default 0.0) and etime defines the end time of
+  the period of interest to plot relative to the experiment start time (default
+  0.0 which here means the end time of the experiment). This is actually a 
+  zoom no data is filtered. y-axis max is adjusted but legend is not adjusted, 
+  use source_filter to remove entries of flows not in window.
+- Added functionality to plot different experiments on same time plot. One
+  can now specify a list of test ids with the test_id parameter. The test ids
+  must be separated by semicolons. The extension is fully backwards-compatible,
+  i.e. just specifying a single test id will give the old behaviour. If multiple
+  ids are specified the pdfs will be created in the sub directory of the test
+  id specified first! If multiple experiments are plotted on the same graph(s) 
+  the file name(s) will be the _first_ test id specified followed by the string
+  "_comparison" to distinguish from graphs where only one experiment is plotted.
+- Added out_name parameter for analyse_all, analyse_cwnd,
+  analyse_rtt, analyse_tcp_rtt, analyse_tcp_stat, analyse_throughput.
+  If out_name is specified the prefix for the pdf files is out_name followed 
+  by the test id (followed by "_comparison" for comparison graphs).
+- If we start experiment with resume=1, it doesn't abort anymore if the
+  file experiments_completed.txt does not exist (will be created after first
+  experiment).
+- Added ymin switch to allow user to define y-axis min for plots for
+  analyse_cmpexp, analyse_cwnd, analyse_rtt, analyse_tcp_rtt, analyse_tcp_stat, 
+  analyse_throughput
+
+Version 0.4.9 (27 May 2014)
+---------------------------
+- fixed vertical grid lines for analyse_cmpexp
+- added OUTLIER_QUANT variable for analyse_cmpexp 
+  (<OUTLIER_QUANT and > 1 - OUTLIER_QUANT quantile values will be removed) 
+- better x-axis labels for analyse_cmpexp
+  - new boolean parameter omit_const_xlab_vars for analyse_cmpexp, set to '1'
+    any variables that have been constant are omitted from the x-axis labels
+    (default is '0') 
+  - NICER_XLABS=1 env variable will plot variable names only once (left) and
+    only plot variables values at each tick 
+- Exposed aggregation window size and aggregation interpolation steps for
+  throughput calculation as environment variables, so one can tweak them as
+  needed. One can specify both using AGGR_WIN_SIZE (window size in seconds)
+  and AGGR_INT_FACTOR (=1 means no interpolation, =n>1 means we get n times the
+  points so n-1 times interpolated points). These work for analyse_throughput
+  and analyse_cmpexp.
+- filtered tcpdumps used by spp are now deleted after use
+- added lnames parameter to specify legend names for analyse_all, analyse_rtt
+  analyse_throughput, analyse_tcp_rtt, analyse_tcp_stat
+- added simple time synchronisation check (checks whether testbed hosts are
+  roughly synchronised with control host running fab)
+- .start files are now created in experiment sub directories
+
+Version 0.4.8 (23 April 2014)
+-----------------------------
+- renamed YMAX_FAC to YMAX_INC
+- fixed bug in sub directory organisation introduced in version 0.4.7
+  (.ipxe files not in sub directory)
+- file prefix for .ipxe files changed to test ID prefix and not full test ID
+- changed the tcp cc algo configuration syntax from host_<N> to host<N> 
+  (underscore removed to improve parsing of file names)
+- all underscores in parameter values used in file names are changed to hyphens
+  again to improve parsing of file names (e.g. fq_codel will be fq-codel)
+
+Version 0.4.7 (16 April 2014)
+-----------------------------
+- added Grenville to AUTHORS
+- added ChangeLog
+- fixed bug in plots that caused legend to be too low in case of single data
+  series
+- made y-axis max increase factor an environment variable (YMAX_FAC)
+- store all files for one experiment under <test ID prefix> sub directory;
+  analyse_all works as before and finds the file in the sub directories
+
+Version 0.4.6 (14 April 2014)
+-----------------------------
+- ensure unique temporary files in analysis.py (instead of using __tmp)
+
+Version 0.4.5 (3 April 2014)
+----------------------------
+- added ethtool info logging for Linux hosts (test NIC)
+  (*_ethtool.log.gz files)
+- set net.ipv4.tcp_moderate_rcvbuf=0 for Linux hosts (hostsetup.py)
+
+Version 0.4.4 (1 April 2014)
+----------------------------
+- added TCP congestion control module parameter logging for Linux hosts
+  (_*tcpmod.log.gz files)
+
+Version 0.4.3 (31 March 2014)
+-----------------------------
+- fixed regression bug in analyse_cmpexp introduced in version 0.4.2
+- added license info to all source files, README, INSTALL
+
+Version 0.4.2 (20 March 2014)
+-----------------------------
+- added group-by-experiment for analyse_cmpexp (analyse.py)
+- fixed bug in analyse_cmpexp that prevented reading web10g logs (analyse.py)
+
+Version 0.4.1 (12 March 2014)
+-----------------------------
+- analysis does not abort anymore if error in web10g log file (analyse.py) 
+- print warning if error in web10g log files (analyse.py)
+- fixed abort in web10g-logger if flow entry expires in kernel DB
+- added version number in tar file name (make_tar.sh)
+
+Version 0.4.0 (7 March 2014)
+----------------------------
+- initial version described in CAIA-TR-140314[abc]
