@@ -24,31 +24,31 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+## @package hosttype
 # Functions to determine the type of host
 #
-# $Id: hosttype.py 958 2015-02-12 04:52:49Z szander $
+# $Id: hosttype.py 1300 2015-05-01 01:36:50Z szander $
 
-from fabric.api import task, warn, local, run, execute, abort, hosts
+from fabric.api import task, warn, local, run, execute, abort, hosts, hide
 
-# maps external ips/names to OS (automatically determined)
+## Map external ips/names to OS (automatically determined)
 host_os = {}
 
-# OS of control host (automatically determined)
-ctrl_host_os = ""
+## OS of control host (automatically determined)
+ctrl_host_os = ''
 
 
-# Get host type and populate host_os, ctrl_host_os
-# Parameters:
-#	host: the host IP or name
-#	for_local: '0' get type of remote host,
-#                  '1' get type of local host (where we execute this script)
-# Return: operating system string, e.g. "FreeBSD" or "Linux" or "CYGWIN"
+## Get host type and populate host_os, ctrl_host_os
+#  @param host Host IP or name
+#  @param for_local If '0' get type of remote host,
+#                   if '1' get type of local host (where we execute script)
+#  @return Operating system string, e.g. "FreeBSD" or "Linux" or "CYGWIN"
 def get_type_cached(host='', for_local='0'):
     global host_os
     global ctrl_host_os
 
     if for_local == '1':
-        if ctrl_host_os == "":
+        if ctrl_host_os == '':
             ctrl_host_os = local('uname -s', capture=True)
         return ctrl_host_os
     else:
@@ -61,13 +61,15 @@ def get_type_cached(host='', for_local='0'):
         return host_os.get(host, '')
 
 
-# Get host operating system type
-# Return: operating system string, e.g. "FreeBSD" or "Linux" or "CYGWIN"
+## Get host operating system type (TASK)
+#  @return Operating system string, e.g. "FreeBSD" or "Linux" or "CYGWIN"
 @task
 def get_type():
     "Get type/OS of host, e.g. Linux"
 
-    htype = run('uname -s', pty=False)
+    with hide('debug', 'warnings'):
+        htype = run('uname -s', pty=False)
+
     # ignore Windows version bit of output
     if htype[0:6] == "CYGWIN":
         htype = "CYGWIN"
@@ -75,7 +77,7 @@ def get_type():
     return htype
 
 
-# Clear host type cache
+## Clear host type cache
 def clear_type_cache():
     global host_os
 

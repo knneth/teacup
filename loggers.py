@@ -24,9 +24,10 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+## @package loggers
 # Logger start/stop methods
 #
-# $Id: loggers.py 995 2015-02-17 00:06:12Z szander $
+# $Id: loggers.py 1257 2015-04-20 08:20:40Z szander $
 
 import re
 import time
@@ -41,14 +42,14 @@ from getfile import getfile
 from runbg import runbg
 
 
-# Collect all the arguments (here basically a dummy method because we
-# don't used the return value)
+## Collect all the arguments (here basically a dummy method because we
+## don't used the return value)
 def _args(*_nargs, **_kwargs):
     "Collect parameters for a call"
     return _nargs, _kwargs
 
 
-# Function to collect used parameters
+## Function to collect used parameters
 def _param_used(name, adict):
     "Store used paramter"
     adict[name] = 1
@@ -69,15 +70,51 @@ def _param(name, adict):
     return val
 
 
-# Dump parameters from config
-# Parameters:
-#       file_prefix: prefix for file name
-#       local_dir: directory on control host where file is copied to
-#	only_used: '0' print all parameters defined (default),
-#                  '1' print only used parameters
-#       args: arguments
-#       kwargs: keyword arguments
-#@task
+## Add variables used in router queue setup
+#  @param queue_spec Queue specification from config file
+#  @param used_vars List where we add used variables
+def add_vars_router_queues(queue_spec, used_vars):
+    for c, v in queue_spec:
+        # prepare so that _params is called
+        v = re.sub("(V_[a-zA-Z0-9_-]*)", "_param_used('\\1', used_vars)", v)
+        # evaluate the string
+        eval('_args(%s)' % v)
+
+
+## Log varying variables used for a series of experiments
+## This really only logs the variables used and their V_ paramters and
+## names in file names for several experiments. log_config_params in
+## contrast logs the variables and their values for each experiment.
+#  @param file_prefix Prefix for file name
+#  @param local_dir Directory on control host where file is copied to
+def log_varying_params(file_prefix='', local_dir='.'):
+    "Log varying parameters for experiment series"
+
+    fname = '%s/%s_varying_params.log' % (local_dir, file_prefix)
+
+    with open(fname, 'w') as f:
+
+        f.write('#V_var_name Short_name Var_param_name\n')
+
+        for var in config.TPCONF_vary_parameters:
+            # list of V_ variables
+            v_names = config.TPCONF_parameter_list[var][0]
+            # list of short names
+            short_names = config.TPCONF_parameter_list[var][1]
+
+            for i in range(len(v_names)):
+                f.write('%s %s %s\n' % (v_names[i], short_names[i], var))
+
+    local('gzip -f %s' % fname)
+
+
+## Dump parameters from config
+#  @param file_prefix Prefix for file name
+#  @param local_dir Directory on control host where file is copied to
+#  @param only_used If '0' print all parameters defined (default),
+#                   if '1' print only used parameters
+#  @param args Arguments
+#  @param kwargs Keyword arguments
 def log_config_params(
         file_prefix='', local_dir='.', only_used='0', *args, **kwargs):
     "Dump parameters from config file"
@@ -95,11 +132,13 @@ def log_config_params(
     used_vars['V_tcp_cc_algo'] = 1
     used_vars['V_runs'] = 1
 
-    for c, v in config.TPCONF_router_queues:
-        # prepare so that _params is called
-        v = re.sub("(V_[a-zA-Z0-9_-]*)", "_param_used('\\1', used_vars)", v)
-        # evaluate the string
-        eval('_args(%s)' % v)
+    
+    if isinstance(config.TPCONF_router_queues, list):
+        add_vars_router_queues(config.TPCONF_router_queues, used_vars)
+    elif isinstance(config.TPCONF_router_queues, dict):
+        for router in config.TPCONF_router_queues.keys():
+            add_vars_router_queues(config.TPCONF_router_queues[router],
+                                   used_vars)
 
     for t, c, v in config.TPCONF_traffic_gens:
         # strip of the method name
@@ -169,14 +208,12 @@ def log_config_params(
     local('gzip -f %s' % fname)
 
 
-# Log host tcp settings
+## Log host TCP settings
+#  @param file_prefix Prefix for file name
+#  @param local_dir Directory on control host where file is copied to
+#  @param args Arguments
+#  @param kwargs Keyword arguments
 # XXX should be unified with the code in hostsetup.py
-# Parameters:
-#       file_prefix: prefix for file name
-#       local_dir: directory on control host where file is copied to
-#       args: arguments
-#       kwargs: keyword arguments
-#@task
 def log_host_tcp(file_prefix='', local_dir='.', *args, **kwargs):
     "Dump TCP configuration of hosts"
 
@@ -243,11 +280,10 @@ def log_host_tcp(file_prefix='', local_dir='.', *args, **kwargs):
     local('gzip -f %s' % fname)
 
 
-# Log system data
-# Parameters:
-#	file_prefix: prefix for file name
-#	remote_dir: directrory on remote where file is created
-#	local_dir: directory on control host where file is copied to
+## Log system data
+#  @param file_prefix Prefix for file name
+#  @param remote_dir Directrory on remote where file is created
+#  @param local_dir Directory on control host where file is copied to
 @task
 @parallel
 def log_sysdata(file_prefix='', remote_dir='', local_dir='.'):
@@ -299,6 +335,9 @@ def log_sysdata(file_prefix='', remote_dir='', local_dir='.'):
         run('ifconfig -a > %s' % file_name)
     else:
         run('ipconfig > %s' % file_name, pty=False)
+        # log interface speeds
+        run('echo "wmic NIC where NetEnabled=true get Name, Speed" >> %s' % file_name, pty=False)
+        run('wmic NIC where NetEnabled=true get Name, Speed >> %s' % file_name, pty=False)
 
     getfile(file_name, local_dir)
 
@@ -347,11 +386,10 @@ def log_sysdata(file_prefix='', remote_dir='', local_dir='.'):
         getfile(file_name, local_dir)
 
 
-# Get queue statistics from router
-# Parameters:
-#       file_prefix: prefix for file name
-#       remote_dir: directrory on remote where file is created
-#       local_dir: directory on control host where file is copied to
+## Get queue statistics from router
+#  @param file_prefix Prefix for file name
+#  @param remote_dir Directrory on remote where file is created
+#  @param local_dir Directory on control host where file is copied to
 @task
 @parallel
 def log_queue_stats(file_prefix='', remote_dir='', local_dir='.'):
@@ -403,16 +441,14 @@ def log_queue_stats(file_prefix='', remote_dir='', local_dir='.'):
     getfile(file_name, local_dir)
 
 
-# Start tcpdump (assume only one tcpdump per host)
-# Parameters:
-#       file_prefix: prefix for file name
-#       remote_dir: directrory on remote where file is created
-#       local_dir: directory for .start file
-#	snap_len: tcpdump/windump snap length
-#       tcpdump_filter: filter string passed to tcpdump
-#	internal_int: '0' external (control) interface
-#                     '1' internal (testbed) interface (default)
-#@task
+## Start tcpdump (assume only one tcpdump per host)
+#  @param file_prefix Prefix for file name
+#  @param remote_dir Directrory on remote where file is created
+#  @param local_dir Directory for .start file
+#  @param snap_len tcpdump/windump snap length
+#  @param tcpdump_filter filter string passed to tcpdump
+#  @param internal_int If '0' external (control) interface
+#                      if '1' internal (testbed) interface (default)
 @parallel
 def start_tcpdump(
         file_prefix='', remote_dir='', local_dir='.', snap_len='80',
@@ -480,12 +516,10 @@ def start_tcpdump(
             file_name)
 
 
-# Stop tcpdump and get dump files
-# Parameters:
-#       file_prefix: prefix for file name
-#       remote_dir: directrory on remote where file is created
-#       local_dir: directory on control host where file is copied to
-#@task
+## Stop tcpdump and get dump files
+#  @param file_prefix Prefix for file name
+#  @param remote_dir Directrory on remote where file is created
+#  @param local_dir Directory on control host where file is copied to
 @parallel
 def stop_tcpdump(file_prefix='', remote_dir='', local_dir='.'):
     "Stop tcpdump instance on host"
@@ -512,12 +546,10 @@ def stop_tcpdump(file_prefix='', remote_dir='', local_dir='.'):
     bgproc.remove_proc(env.host_string, 'tcpdump', '0')
 
 
-# Start tcp logger
-# Parameters:
-#       file_prefix: prefix for file name
-#       remote_dir: directrory on remote where file is created
-#       local_dir: directory for .start file
-#@task
+## Start TCP logger
+#  @param file_prefix Prefix for file name
+#  @param remote_dir Directrory on remote where file is created
+#  @param local_dir Directory for .start file
 @parallel
 def start_tcp_logger(file_prefix='', remote_dir='', local_dir='.'):
     "Start TCP information logger (e.g. siftr on FreeBSD)"
@@ -704,13 +736,10 @@ def start_tcp_logger(file_prefix='', remote_dir='', local_dir='.'):
         warn("No TCP logger available on OS '%s'" % htype)
 
 
-# Stop tcp logger
-# This is only called for SIFTR
-# Parameters:
-#       file_prefix: prefix for file name
-#       remote_dir: directrory on remote where file is created
-#       local_dir: directory on control host where file is copied to
-#@task
+## Stop TCP logger (is only called for SIFTR)
+#  @param file_prefix Prefix for file name
+#  @param remote_dir Directrory on remote where file is created
+#  @param local_dir Directory on control host where file is copied to
 @parallel
 def stop_tcp_logger(file_prefix='', remote_dir='', local_dir='.'):
     "Stop TCP logger (e.g. siftr on FreeBSD)"
@@ -763,79 +792,10 @@ def stop_tcp_logger(file_prefix='', remote_dir='', local_dir='.'):
     bgproc.remove_proc(env.host_string, 'tcplogger', '00')
 
 
-# Start dummynet logger
-# Parameters:
-#       file_prefix: prefix for file name
-#       remote_dir: directrory on remote where file is created
-#	local_dir: directory for .start file
-#@task
-@parallel
-def start_dummynet_logger(file_prefix='', remote_dir='', local_dir='.'):
-    "Start logging queue size with instrumented dummynet"
-
-    if remote_dir != '' and remote_dir[-1] != '/':
-        remote_dir += '/'
-
-    # get host type
-    htype = get_type_cached(env.host_string)
-
-    if htype == 'FreeBSD':
-        logfile = remote_dir + file_prefix + "_" + \
-            env.host_string.replace(':', '_') + '_dummynet.log'
-        run('sysctl net.inet.ip.dummynet.logfile=%s' % logfile)
-        run('sysctl net.inet.ip.dummynet.enabled=1')
-    else:
-        abort("No dummynet logging available on OS '%s'" % htype)
-
-    #bgproc.register_proc(env.host_string, 'dummynetlogger', '0', '0', logfile)
-    bgproc.register_proc_later(
-        env.host_string,
-        local_dir,
-        'dummynetlogger',
-        '0',
-        '0',
-        logfile)
-
-
-# Stop dummynet logger
-# Parameters:
-#       file_prefix: prefix for file name
-#       remote_dir: directrory on remote where file is created
-#       local_dir: directory on control host where file is copied to
-#@task
-@parallel
-def stop_dummynet_logger(file_prefix='', remote_dir='', local_dir='.'):
-    "Stop dummynet logging and get data"
-
-    # get host type
-    htype = get_type_cached(env.host_string)
-
-    if htype == 'FreeBSD':
-        run('sysctl net.inet.ip.dummynet.enabled=0')
-
-        logfile = file_prefix + '_' + \
-            env.host_string.replace(':', '_') + '_dummynet.log'
-        if remote_dir != '':
-            logfile = remote_dir + '/' + logfile
-
-        if file_prefix != '' or remote_dir != '':
-            file_name = logfile
-        else:
-            file_name = bgproc.get_proc_log(
-                env.host_string,
-                'dummynetlogger',
-                '0')
-
-        getfile(file_name, local_dir)
-        bgproc.remove_proc(env.host_string, 'dummynetlogger', '0')
-
-
-# Start all loggers
-# Parameters:
-#       file_prefix: prefix for file name
-#       remote_dir: directrory on remote where file is created
-#       local_dir: directory for .start file
-#@task
+## Start all loggers
+#  @param file_prefix Prefix for file name
+#  @param remote_dir Directrory on remote where file is created
+#  @param local_dir Directory for .start file
 @serial
 def start_loggers(file_prefix='', remote_dir='', local_dir='.'):
     "Start all loggers"
@@ -848,15 +808,27 @@ def start_loggers(file_prefix='', remote_dir='', local_dir='.'):
         local_dir,
         hosts=config.TPCONF_router +
         config.TPCONF_hosts)
+
+    # get snaplen setting from config file if present
+    # default is 80 bytes
+    snap_len = 80
+    try:
+        snap_len = config.TPCONF_pcap_snaplen
+        if snap_len == 0:
+            snap_len = 65535
+    except AttributeError:
+        pass
+
     # start tcpdumps on testbed interfaces
     execute(
         start_tcpdump,
         file_prefix,
         remote_dir,
         local_dir,
-        snap_len=80,
+        snap_len=snap_len,
         hosts=config.TPCONF_router +
         config.TPCONF_hosts)
+
     # start TCP loggers
     execute(
         start_tcp_logger,
@@ -864,21 +836,16 @@ def start_loggers(file_prefix='', remote_dir='', local_dir='.'):
         remote_dir,
         local_dir,
         hosts=config.TPCONF_hosts)
-    # XXX don't have instrumented dummynet
-    # execute(start_dummynet_logger, file_prefix, remote_dir, local_dir,
-    #        hosts = config.TPCONF_router)
 
     # register logger processes started in parallel
     bgproc.register_deferred_procs(local_dir)
 
 
-# Start broadcast ping loggers
-# Parameters:
-#       file_prefix: prefix for file name
-#       remote_dir: directrory on remote where file is created
-#       local_dir: directory for .start file
-#       bc_addr: broadcast address used
-#@task
+## Start broadcast ping loggers
+#  @param file_prefix Prefix for file name
+#  @param remote_dir Directrory on remote where file is created
+#  @param local_dir Directory for .start file
+#  @param bc_addr Broadcast/multicast address used
 @serial
 def start_bc_ping_loggers(file_prefix='', remote_dir='', local_dir='.', bc_addr=''):
     "Start broadcast ping loggers"

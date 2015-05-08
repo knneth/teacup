@@ -24,9 +24,10 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+## @package runbg
 # Command to run background processes
 #
-# $Id: runbg.py 958 2015-02-12 04:52:49Z szander $
+# $Id: runbg.py 1268 2015-04-22 07:04:19Z szander $
 
 import time
 import bgproc
@@ -35,18 +36,18 @@ from hosttype import get_type_cached
 from getfile import getfile
 
 
-# Run background command on remote (this just makes sure we can detach
-# properly from shell without having to resort to dtach etc.)
-# Parameters:
-#       command: command to execute
-#       out_file: file where stdout is redirected to
-#	wait: wait time in seconds.milliseconds before execute
-#	shell: False: don't execute in separate shell,
-#              True: execute in separate shell (see Fabric documentation)
-# pty: False -> don't use pseudo terminal, True -> use pseudo terminal
-# (see Fabric documentation)
+## Run background command on remote (this just makes sure we can detach
+## properly from shell without having to resort to dtach etc.)
+#  @param command Command to execute
+#  @param out_file File where stdout is redirected to
+#  @param wait Wait time in seconds.milliseconds before execute
+#  @param shell If set false, don't execute in separate shell. If set
+#               true, execute in separate shell (see Fabric documentation)
+#  @param pty If set false, don't use pseudo terminal. If true, use pseudo 
+#             terminal (see Fabric documentation)
+#  @return Process ID
 def runbg(command, wait='0.0', out_file="/dev/null",
-          err_file=None, shell=False, pty=True):
+          shell=False, pty=True):
 
     # get type of current host
     htype = get_type_cached(env.host_string)
@@ -81,10 +82,9 @@ def runbg(command, wait='0.0', out_file="/dev/null",
     return pid
 
 
+## Stop a process
+#  @param pid Process ID
 @task
-# Stop a process
-# Parameters:
-#       pid: process ID
 def stop_process(pid):
     # first: kill child process(es) started started by process (e.g.
     # runbg_wrapper start child processes)
@@ -104,14 +104,13 @@ def stop_process(pid):
 
 # must import this down here to make circular dependency work (XXX move
 # stop functions into separate file?)
-from loggers import stop_tcp_logger, stop_dummynet_logger
+from loggers import stop_tcp_logger
 
 
-# Stop all processes
+## Stop all processes
+#  @param local_dir Local directory to download log file to
 # XXX stop processes in parallel (tried to implement this but didn't
 # work with fabric)
-# Parameters:
-#       local_dir: local directory to download log file to
 @task
 def stop_processes(local_dir='.'):
 
@@ -123,12 +122,6 @@ def stop_processes(local_dir='.'):
             # handle siftr and dummynet logger
             if k.find('tcplogger') > -1:
                 execute(stop_tcp_logger, local_dir=local_dir, hosts=[v.host])
-            elif k.find('dummynetlogger') > -1:
-                execute(
-                    stop_dummynet_logger,
-                    local_dir=local_dir,
-                    hosts=[
-                        v.host])
 
     # second: get log files
     for k, v in sorted(bgproc.get_proc_list_items()):

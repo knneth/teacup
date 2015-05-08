@@ -24,52 +24,162 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+## @package fabfile
 # fabfile
 #
-# $Id: fabfile.py 1012 2015-02-20 07:21:57Z szander $
+# $Id: fabfile.py 1302 2015-05-01 07:47:33Z szander $
 
+import os
+import imp
 import datetime
-from fabric.api import execute, task
+from fabric.api import execute, task, env, abort, local
 
 # this will print paramiko errors on stderr
 import logging
 logging.getLogger('paramiko.transport').addHandler(logging.StreamHandler())
 
-import config
+# if the env variable teacup_config is set import the config file specified.
+# the variable is set as follows: fab --set teacup_config=myconfig.py
+# otherwise import the default config.py
+try:
+    if not os.path.isfile(env.teacup_config):
+        abort('Specified config file %s does not exit' % env.teacup_config) 
+
+    # before loading config change to the directory of specified config file
+    # this is needed to make execfile without absolute path in config file work
+    # afterwards change back directory to current path
+    curr_dir = os.getcwd()
+    config_dir = os.path.dirname(env.teacup_config)
+    if config_dir == '':
+        config_dir = '.'
+    os.chdir(config_dir)
+    config = imp.load_source('config', env.teacup_config)
+    os.chdir(curr_dir)
+
+except AttributeError:
+    import config
+
+# now import all the teacup modules. to be backwards compatible with old
+# versions (since we can select the configuration file now), we MUST wrap
+# all new tasks in try-except. we can group together tasks that were added
+# as batch, i.e. if they were all added together in one version, they
+# can be in the same try clause
+
 from experiment import run_experiment
 from hosttype import get_type
 from hostint import get_netint
 from hostmac import get_netmac
 from sanitychecks import check_host, check_connectivity, kill_old_processes, \
     sanity_checks, get_host_info, check_config, check_time_sync
-from hostsetup import init_host, init_ecn, init_cc_algo, init_router, \
-    init_hosts, init_os, power_cycle, init_host_custom, init_topology
-from loggers import start_tcpdump, stop_tcpdump, start_tcp_logger, \
-    stop_tcp_logger, start_dummynet_logger, stop_dummynet_logger, start_loggers, \
-    log_sysdata, log_queue_stats, log_config_params, log_host_tcp
-from routersetup import init_pipe, show_pipes
-from trafficgens import start_iperf, stop_iperf, start_ping, stop_ping, \
-    start_http_server, stop_http_server, start_httperf, stop_httperf, \
-    start_httperf_dash, stop_httperf_dash, create_http_dash_content, \
-    create_http_incast_content, start_httperf_incast, \
-    stop_httperf_incast, start_httperf_incast_n
-from analyse import analyse_rtt, analyse_cwnd, analyse_tcp_rtt, \
-    analyse_throughput, analyse_all, analyse_dash_goodput, analyse_tcp_stat, \
-    analyse_cmpexp, analyse_incast, extract_rtt, extract_cwnd, extract_tcp_rtt, \
-    extract_throughput, extract_all, extract_dash_goodput, extract_tcp_stat, \
-    extract_incast, analyse_ackseq, analyse_2d_density, extract_ackseq
 from util import exec_cmd, authorize_key, copy_file
-from clockoffset import get_clock_offsets, adjust_timestamps
+from hostsetup import init_host, init_ecn, init_cc_algo, init_router, \
+        init_hosts, init_os, power_cycle, init_host_custom
 
-# set to zero if we don't need OS initialisation anymore
+try:
+    from hostsetup import init_topology
+except ImportError:
+    pass
+
+from loggers import start_tcpdump, stop_tcpdump, start_tcp_logger, \
+    stop_tcp_logger, start_loggers, log_sysdata, log_queue_stats, \
+    log_config_params, log_host_tcp, log_varying_params
+from routersetup import init_pipe, show_pipes
+from trafficgens import start_iperf, start_ping, \
+    start_http_server, start_httperf, \
+    start_httperf_dash, create_http_dash_content, \
+    create_http_incast_content, start_httperf_incast
+
+try:
+    from trafficgens import start_httperf_incast_n 
+except ImportError:
+    pass
+
+from analyse import analyse_rtt, analyse_cwnd, analyse_tcp_rtt, \
+        analyse_throughput, analyse_all, analyse_dash_goodput, \
+        analyse_tcp_stat, analyse_cmpexp
+
+try:
+    from analyse import analyse_incast
+except ImportError:
+    pass
+
+try:
+    from analyse import extract_rtt, extract_cwnd, extract_tcp_rtt, \
+        extract_all, extract_dash_goodput, \
+        extract_tcp_stat, extract_incast
+except ImportError:
+    pass
+
+try:
+    from analyse import extract_throughput
+except ImportError:
+    pass
+
+# renamed extract_throughput to extract_pktsizes in version 0.9
+try:
+    from analyse import extract_pktsizes
+except ImportError:
+    pass
+
+try:
+    from analyse import analyse_ackseq, extract_ackseq
+except ImportError:
+    pass
+
+try:
+    from analyse import analyse_2d_density, extract_incast_iqtimes, \
+         extract_incast_restimes, analyse_incast_iqtimes, analyse_goodput
+except ImportError:
+    pass
+
+try:
+    from analyse import extract_pktloss, analyse_pktloss
+except ImportError:
+    pass
+
+try:
+    from clockoffset import get_clock_offsets, adjust_timestamps
+except ImportError:
+    pass
+
+try:
+    pass # initialsetup is not public
+except ImportError:
+    pass
+
+try:
+    from version import get_version 
+except ImportError:
+    pass
+
+try:
+    from backupconfig import backup_config, dump_config_vars
+except ImportError:
+    pass
+
+try:
+    from nameipmap import get_nameip_map
+except ImportError:
+    pass
+
+try:
+    from internalutil import mkdir_p
+except ImportError:
+    pass
+
+
+## Set to zero if we don't need OS initialisation anymore
 # XXX this is a bit ugly as a global
 do_init_os = '1'
 
-# list of experiment completed (from experiments_completed.txt)
+## List of experiment completed (from experiments_completed.txt)
 experiments_done = {}
 
 
-# sets all basic parameters not yet set to single values
+## Set all basic parameters not yet set to single values
+#  @param nargs Arguments
+#  @param kwargs Keyword arguments
+#  @return Extended nargs, kwargs
 def _fill_missing(*nargs, **kwargs):
 
     global do_init_os
@@ -94,8 +204,10 @@ def _fill_missing(*nargs, **kwargs):
     return nargs, kwargs
 
 
-# check if experiment test_id has been done before based on
-# experiments_completed.txt file
+## Check if experiment has been done before based on
+## experiments_completed.txt file
+#  @param test_id Experiment ID
+#  @return True if experiment has been done before, false otherwise
 def _experiment_done(test_id=''):
     global experiments_done
 
@@ -117,10 +229,29 @@ def _experiment_done(test_id=''):
         return True
 
 
-# Run single experiment
-# Parameters:
-#	test_id: test ID prefix
-#	nargs, kwargs: various parameters
+## Check config file and log config information
+#  @param test_id Test ID
+def config_check_and_log(test_id):
+    execute(check_config, hosts=['MAIN'])  # use a dummy host here and below
+
+    # create sub directory for test id prefix
+    mkdir_p(test_id)
+    execute(log_varying_params, test_id, test_id, hosts=['MAIN'])
+
+    # make copy of config and dump TPCONF variables
+    # wrap these in try-except cause they don't exist for old versions
+    try:
+        execute(backup_config, test_id, hosts=['MAIN'])
+        execute(dump_config_vars, test_id, hosts=['MAIN'])
+        execute(get_nameip_map, test_id, hosts=['MAIN'])
+    except:
+        pass
+
+
+## Run single experiment (TASK)
+#  @param test_id Test ID prefix
+#  @param nargs Arguments (user-supplied parameters)
+#  @param kwargs Keyword arguments (user-supplied parameters)
 @task
 def run_experiment_single(test_id='', *nargs, **kwargs):
     "Run a single experiment"
@@ -128,24 +259,24 @@ def run_experiment_single(test_id='', *nargs, **kwargs):
     if test_id == '':
         test_id = config.TPCONF_test_id
 
-    execute(check_config, hosts=['MAIN'])  # use a dummy host here
-
+    config_check_and_log(test_id)
+    
     _nargs, _kwargs = _fill_missing(*nargs, **kwargs)
     execute(run_experiment, test_id, test_id, *_nargs, **_kwargs)
 
 
-# Generic function for varying a parameter
-# Parameters:
-#	test_id: test ID
-#	test_id_pfx: test ID prefix
-#	resume: '0' do all experiment, '1' do not repeat experiment if done according
-#               to experiments_completed.txt
-#	var_list: list of parameters to vary
-#	names: list of variable names corrsponding to parameters
-#	short_names: list of short names used in file names corrsponding to parameters
-#	val_list: list of variable values corrsponding to parameters
-#	extra_params: extra variables we need to set
-#	nargs, kwargs: variables we set and finally pass to run_experiment
+## Generic function for varying a parameter
+#  @param test_id Test ID
+#  @param test_id_pfx Test ID prefix
+#  @param resume '0' do all experiment, '1' do not repeat experiment if done according
+#                to experiments_completed.txt
+#  @param var_list List of parameters to vary
+#  @param names List of variable names corrsponding to parameters
+#  @param short_names List of short names used in file names corrsponding to parameters
+#  @param val_list List of variable values corrsponding to parameters
+#  @param extra_params Extra variables we need to set
+#  @param nargs: variables we set and finally pass to run_experiment
+#  @param kwargs: variables we set and finally pass to run_experiment
 def _generic_var(test_id='', test_id_pfx='', resume='0', var_list=[], names=[
 ], short_names=[], val_list=[], extra_params={}, *nargs, **kwargs):
 
@@ -214,13 +345,12 @@ def _generic_var(test_id='', test_id_pfx='', resume='0', var_list=[], names=[
                 do_init_os = '0'
 
 
-# This is the enrty point when we want to a series of experiments varying
-# different things
-# Parameters:
-#       test_id: test ID prefix
-#       resume: '0' do all experiment, '1' do not repeat experiment if done
-#               according to experiments_completed.txt
-#       nargs, kwargs: various parameters
+## Run a series of experiments varying different things (TASK)
+#  @param test_id Test ID prefix
+#  @param resume '0' do all experiment, '1' do not repeat experiment if done
+#                according to experiments_completed.txt
+#  @param nargs Various parameters (supplied by user)
+#  @param kwargs Various parameters (supplied by user)
 @task
 def run_experiment_multiple(test_id='', resume='0', *nargs, **kwargs):
     "Run series of experiments"
@@ -228,7 +358,7 @@ def run_experiment_multiple(test_id='', resume='0', *nargs, **kwargs):
     if test_id == '':
         test_id = config.TPCONF_test_id
 
-    execute(check_config, hosts=['MAIN'])  # use a dummy host here
+    config_check_and_log(test_id)
 
     var_list = config.TPCONF_vary_parameters
 

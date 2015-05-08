@@ -27,7 +27,7 @@
 # Plot contour of distrbutions, looks like a bubble graph but technically
 # a bubble graph is different 
 #
-# $Id: plot_time_series.R 958 2015-02-12 04:52:49Z szander $
+# $Id: plot_contour.R 1302 2015-05-01 07:47:33Z szander $
 
 # Evironment parameters that control the script (alphabetical order):
 # ADD_RAND:  '0' default 
@@ -99,7 +99,7 @@
 #           before plotting. Again, must have length two, first factor for x-axis and
 #           second factor for y-axis.
 
-library(MASS) # kde2d
+#library(MASS) # kde2d
 library(ggplot2)
 
 # our current dir
@@ -245,7 +245,7 @@ no_legend = Sys.getenv("NO_LEGEND")
 
 # maxmimum number of points for one group
 # (with too many points the point mapping takes forever)
-MAX_DATA_POINTS = 10000
+MAX_DATA_POINTS = 1000000
 
 
 # source basic plot stuff
@@ -267,6 +267,12 @@ icols[[5]] = c("#ffffff", "#f1eef6", "#d7b5d8", "#df65b0", "#dd1c77", "#980043")
 icols[[6]] = c("#ffffff", "#f7f7f7", "#cccccc", "#969696", "#636363", "#252525")
 
 cols <- c("#006d2c", "#045a8d", "#b30000", "#810f7c", "#980043", "#252525")
+
+# function to compute the percentage
+percentage <- function(x)
+{
+        return ( as.numeric(sum(x)) / as.numeric(length(x)) * 100.0 )
+}
 
 # main
 
@@ -312,7 +318,7 @@ if (diffs[1] == "1") {
 	}
 }
 
-if (aggrs[1] == "1") {
+if (aggrs[1] != "" && aggrs[1] != "0") {
         for (i in c(1:length(xdata))) {
                 window_size = aggr_win_size # window in seconds
                 interpolate_steps = aggr_int_factor # "oversampling" factor
@@ -322,13 +328,28 @@ if (aggrs[1] == "1") {
                 for (x in iseq) {
                         tmp = xdata[[i]]
                         tmp[,1] = floor((tmp[,1] - x)*(1/window_size))
+
+			if (aggrs[1] == "1") {
+                                # throughput
+                                myfun=sum
+                        } else if (aggrs[1] == "2") {
+                                # packet loss
+                                myfun=percentage
+                        }
+	
                         data_out = rbind(data_out, cbind(
                                        data.frame(as.numeric(levels(factor(tmp[,1])))/(1/window_size) +
                                                   x + (1/interpolate_steps)/2 + window_size/2),
-                                       data.frame(tapply(tmp[,-1], tmp[,1], FUN=sum))))
+                                       data.frame(tapply(tmp[,-1], tmp[,1], FUN=myfun))))
                 }
                 xdata[[i]] = data_out[order(data_out[,1]),]
-                xdata[[i]][,2] = xdata[[i]][,2] * (1/window_size)
+                if (aggrs[1] == "1") {
+                        # throughput
+                        xdata[[i]][,2] = xdata[[i]][,2] * (1/window_size)
+                } else if (aggrs[1] == "2") {
+                        # packet loss
+                        xdata[[i]][,2] = xdata[[i]][,2]
+                }
                 #print(xdata[[i]])
         }
 }
@@ -362,7 +383,7 @@ if (diffs[2] == "1") {
 	}
 }
 
-if (aggrs[2] == "1") {
+if (aggrs[2] != "" && aggrs[2] != "0") {
         for (i in c(1:length(ydata))) {
 
                 window_size = aggr_win_size # window in seconds
@@ -373,13 +394,28 @@ if (aggrs[2] == "1") {
                 for (x in iseq) {
                         tmp = ydata[[i]]
                         tmp[,1] = floor((tmp[,1] - x)*(1/window_size))
+
+                        if (aggrs[2] == "1") {
+                                # throughput
+                                myfun=sum
+                        } else if (aggrs[2] == "2") {
+                                # packet loss
+                                myfun=percentage
+                        }
+
                         data_out = rbind(data_out, cbind(
                                        data.frame(as.numeric(levels(factor(tmp[,1])))/(1/window_size) +
                                                   x + (1/interpolate_steps)/2 + window_size/2),
-                                       data.frame(tapply(tmp[,-1], tmp[,1], FUN=sum))))
+                                       data.frame(tapply(tmp[,-1], tmp[,1], FUN=myfun))))
                 }
                 ydata[[i]] = data_out[order(data_out[,1]),]
-                ydata[[i]][,2] = ydata[[i]][,2] * (1/window_size)
+                if (aggrs[2] == "1") {
+                        # throughput
+                        ydata[[i]][,2] = ydata[[i]][,2] * (1/window_size)
+                } else if (aggrs[2] == "2") {
+                        # packet loss
+                        ydata[[i]][,2] = ydata[[i]][,2]
+                }
                 #print(ydata[[i]])
 	}
 }

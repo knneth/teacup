@@ -26,7 +26,7 @@
 #
 # Plot metrics for different parameter combinations 
 #
-# $Id: plot_cmp_experiments.R 1012 2015-02-20 07:21:57Z szander $
+# $Id: plot_cmp_experiments.R 1302 2015-05-01 07:47:33Z szander $
 
 # Evironment parameters that control the script (alphabetical order):
 # AGGR:   '0' means plot data as is, i.e. values over time
@@ -41,6 +41,9 @@
 # BOXPL:  '0' plot each point on time axis (x-axis)
 #         '1' plot a boxplot over all data points from all data seres for each 
 #         distinct timestamp (instead of a point for each a data series) 
+# MERGE_GROUPS: '0' plot each different group separately
+#               '1' collaspe all groups into one
+# NOTE THAT MERGE_GROUPS IS DEPRECATED BUT STILL HERE FOR BACKWARDS COMPATIBILITY
 # ETIME:  end time on x-axis (for zooming in), default is 0.0 meaning the end of an
 #         experiment a determined from the data
 # FNAMES: comma-separated list of file names (each file contains one date series,
@@ -49,13 +52,6 @@
 #         column contains the timestamps. The second, third etc. columns contain
 #         data, but only one of these columns will be plotted (which is set with 
 #         YINDEX). 
-# GROUPS: comma-separated list of group IDs (integer numbers). This list must  
-#         have the same length as FNAMES. If data from different experiments is plotted,
-#         each experiment will be assigned a different number and these are passed
-#         via GROUPS. This allows the plotting function to determine which data
-#         series are (or are not) from the same experiment, so that results 
-#         from different experiments, that started at different times, can be 
-#         plotted in the same graph.
 # LNAMES: comma-separated list of legend names. this list has the same length
 #         as FNAMES and each entry corresponds to data in file name with the
 #         same index in FNAMES. legend names must be character strings that do
@@ -63,6 +59,13 @@
 # NICER_XLABS: '0' or unset means XLABS is printed as is
 #              '1' means only the values in XLABS are printed underneath the ticks,
 #              while the names are only printed once on the left side 
+# NOMINAL_RES_TIME: '0' don't plot nominal response times
+#                   '1' plot nominal response times
+# RATIO_RES_TIME: '0' normal plot
+#                 '1' plot ratio of median/mean response time and nominal
+#                     response time
+# NO_BARS: '0' by default median and mean are plotted as bars
+#          '1' plot median and mean as points
 # OTYPE:  type of output file (can be 'pdf', 'eps', 'png', 'fig')
 # OPREFIX: the prefix (first part) of the graph file name
 # ODIR:   directory where output files, e.g. pdf files are placed
@@ -164,10 +167,69 @@ aggr_int_factor = 4
 if (tmp != "") {
         aggr_int_factor = as.numeric(tmp)
 }
+# merge groups 
+merge_groups = Sys.getenv("MERGE_GROUPS")
+if (merge_groups == "" || merge_groups == "0") {
+        merge_groups = FALSE
+} else {
+        merge_groups = TRUE
+}
+# nominal response time
+tmp = Sys.getenv("NOMINAL_RES_TIME")
+if (tmp == "" || tmp == "0") {
+        nominal_res_time = FALSE
+} else {
+        nominal_res_time = TRUE
+}
+# response time ratio
+tmp = Sys.getenv("RATIO_RES_TIME")
+if (tmp == "" || tmp == "0") {
+        ratio_res_time = FALSE
+} else {
+        ratio_res_time = TRUE
+}
+# use points instead of bars 
+tmp = Sys.getenv("NO_BARS")
+if (tmp == "" || tmp == "0") {
+        no_bars = FALSE
+} else {
+        no_bars = TRUE
+}
+
 
 # source basic plot stuff
 source(paste(base_dir, "plot_func.R", sep="/"), verbose=F)
 
+
+# function to get parameter values for parameters encoded in file name
+get_param_value <- function(fname, param)
+{
+	fields = strsplit(basename(fname), "_", fixed=T)[[1]]
+        for (i in c(1:length(fields))) {
+		if (fields[i] == param) {
+			val = fields[i + 1]
+
+                        # make sure we get number for bandwidth
+                        val = gsub("kbit", "000", val)
+                        val = gsub("mbit", "000000", val)
+		
+  			val = as.numeric(val)
+                        #print(paste("VALUE",val))
+
+			if (is.numeric(val)) {
+                        	return(val)
+			}
+		}	
+	}
+
+	return(0) 
+}
+
+# function to compute the percentage
+percentage <- function(x)
+{
+        return ( as.numeric(sum(x)) / as.numeric(length(x)) * 100.0 )
+}
 
 # main
 
@@ -226,7 +288,7 @@ if (diff == "1") {
         }
 }
 
-if (aggr == "1") {
+if (aggr != "" && aggr != "0") {
 	ymin = 1e99
         ymax = 0
         xmax = 0
@@ -241,13 +303,28 @@ if (aggr == "1") {
                 for (x in iseq) {
                         tmp = data[[i]]
                         tmp[,1] = floor((tmp[,1] - x)*(1/window_size))
+
+                        if (aggr == "1") {
+                                # throughput
+                                myfun=sum
+                        } else if (aggr == "2") {
+                                # packet loss
+                                myfun=percentage
+                        }
+
                         data_out = rbind(data_out, cbind(
                                          data.frame(as.numeric(levels(factor(tmp[,1])))/(1/window_size) + 
                                                     x + (1/interpolate_steps)/2 + window_size/2), 
-                                         data.frame(tapply(tmp[,-1], tmp[,1], FUN=sum))))
+                                         data.frame(tapply(tmp[,-1], tmp[,1], FUN=myfun))))
                 }
                 data[[i]] = data_out[order(data_out[,1]),]
-                data[[i]][,2] = data[[i]][,2] * (1/window_size)
+                if (aggr == "1") {
+                        # throughput
+                        data[[i]][,2] = data[[i]][,2] * (1/window_size)
+                } else if (aggr == "2") {
+                        # packet loss
+                        data[[i]][,2] = data[[i]][,2]
+                }
                 #print(data[[i]])
 
                 if (max(data[[i]][,2]) > ymax) {
@@ -334,6 +411,19 @@ par(mar=c(4.6, 5.1, 2.1, 3.6))
 par(las=1) # always vertical labels
 f = 1 + ceiling(length(lnames)/3) * ymax_inc 
 
+# optionally collapse groups
+if (merge_groups) {
+	ndata = list()
+	for (i in c(1:(length(data) / length(lnames)))) {
+        	ndata[[i]] = vector() 
+		for (j in c(1:length(lnames))) {
+			ndata[[i]] = append(ndata[[i]], data[[length(lnames) * (i-1) + j]])
+		}
+	}	
+	lnames = c("Merged groups")
+	data = ndata
+}
+
 atvec = vector()
 atvec_axis = vector()
 atcols = vector()
@@ -353,6 +443,19 @@ for (x in atvec_axis) {
 print(atvec)
 print(atvec_axis)
 print(atcols)
+
+if (ratio_res_time || nominal_res_time) {
+        # plot nominal response time
+        nom_rtimes = vector()
+
+        for (fname in fnames) {
+                inc_size = get_param_value(fname, "incSz")
+                bandwidth = get_param_value(fname, "down")
+                responders = get_param_value(fname, "responders")
+
+                nom_rtimes = append(nom_rtimes, inc_size * 1024 * responders / (bandwidth/8))
+        }
+}
 
 if (ptype == "box") {
 	boxplot(data, at=atvec, col=atcols, bg=atcols, cex=cexs[1], ylab=ylab, 
@@ -386,21 +489,53 @@ if (ptype == "box") {
 		ymax = ymax_user
 	}
 
-	#plot(xvals[,1], yvals[,1], type="p", pch=pchs[1], col=cols[1], bg=cols[1], 
-        #     cex=cexs[1], xlab="", ylab=ylab, xlim=c(1, length(data)), ylim=c(ymin, 
-        #     ymax*f), main = title, cex.main=0.5, axes=F)
-	plot(xvals[,1], yvals[,1], type="h", lwd=4, lend=1, pch=pchs[1], col=cols[1], 
+        if (no_bars) {
+      		plot_type="p"
+                plot_lwd=1
+	} else {
+		plot_type="h"
+                plot_lwd=4
+	}
+
+        if (ratio_res_time) {
+		for (j in c(1:length(lnames))) {
+			yvals[,j] = yvals[,j] / nom_rtimes
+		}
+                print(yvals)
+	}
+
+	plot(xvals[,1], yvals[,1], type=plot_type, lwd=plot_lwd, lend=1, pch=pchs[1], col=cols[1], 
              bg=cols[1], cex=cexs[1], xlab="", ylab=ylab, xlim=c(1, length(data)), 
              ylim=c(ymin, ymax*f), main = title, cex.main=0.5, axes=F)
 	grid(nx=NA, ny=NULL)
 	abline(v=atvec_xgrid, lty=3, col="lightgray")
 	for (j in c(1:length(lnames))) {
-		#points(xvals[,j], yvals[,j], type="p", pch=pchs[j], col=cols[j], 
-                #       bg=cols[j], cex=cexs[j])	
-		points(xvals[,j], yvals[,j], type="h", lwd=4, lend=1, pch=pchs[j], 
+		points(xvals[,j], yvals[,j], type=plot_type, lwd=plot_lwd, lend=1, pch=pchs[j], 
                        col=cols[j], bg=cols[j], cex=cexs[j])	
 	}
 }
+
+if (nominal_res_time) {
+	points(c(1:length(nom_rtimes)), nom_rtimes, pch=22, cex=plot_point_size ,
+               col="red", bg="red")
+}
+
+# if we have fewer labels than xaxis points, but the points divided by the labels is
+# an integer number than speculate that we want to have fewer xaxis points
+# for example, we have this case if we filter on sender in incast scenarios with
+# multiple responders
+if (length(xlabs) < length(atvec_axis) && length(atvec_axis) %% length(xlabs) == 0) {
+	new_vec = c(1:length(xlabs)) * (length(atvec_axis) / length(xlabs)) - 
+                  (length(atvec_axis) / length(xlabs))/2
+        atvec_axis = new_vec
+}
+
+# font size for x-axis text
+# the font sizes are set with cex.axis and cex. we scale the fonts based on 
+# xlab_vars_cnt and there is always a maximum size, so the code is
+# min(<maximum>, 1/xlab_vars_cnt*<scaler>). to adjust the sizes modify the maximum or
+# the scaling factor or set size to a constant value that works for a certain
+# scenario. 
 
 axis(1, at=atvec_axis, labels=FALSE)
 xlab_vars_cnt = max(sapply(strsplit(as.character(xlabs), split= "\n"), length))
@@ -411,13 +546,18 @@ if (nicer_xlabs) {
 	for (name in var_names) {
 		xlabs = gsub(paste(name, " ", sep=""), "", xlabs) 
 	}
-	axis(1, at=atvec_axis, labels= xlabs, cex.axis=min(0.7, 1/xlab_vars_cnt*3), 
-             line=1.5, tick=FALSE)
-	mtext(paste(var_names, sep="", collapse="\n"), 1, line=1.5 + 1, at=-1, 
-              cex = min(0.7, 1/xlab_vars_cnt*3))
+
+        # plot parameters values under x-axis ticks
+	axis(1, at=atvec_axis, labels= xlabs, cex.axis=min(0.8, 1/xlab_vars_cnt*2.4), 
+             padj=0, line= xlab_vars_cnt/2 - 0.5, tick=FALSE)
+
+        # plot names to the left of y-xis right-aligned to y-axis 
+	mtext(paste(var_names, sep="", collapse="\n"), 1, line= xlab_vars_cnt/2 + 0.5, 
+              at= par("usr")[1], adj=1, cex = min(0.8, 1/xlab_vars_cnt*2.4))
 } else {
+        # plot parameter names plus values under x-axis ticks
 	axis(1, at=atvec_axis, labels= xlabs, cex.axis=min(0.4, 1/xlab_vars_cnt*2.4), 
-             line=1.5, tick=FALSE)
+             padj=0, line= xlab_vars_cnt/4 - 0.5, tick=FALSE)
 }
 
 axis(2, cex.axis=1)
@@ -432,8 +572,22 @@ if (length(lnames) <= 3) {
 
 #legend("topleft", ncol=ncol, inset=linset, legend=lnames, pch=pchs, col=cols, pt.bg=cols, 
 #       pt.cex=cexs, cex=0.52, border=NA, bty="o", bg="white", box.col="white")
-legend("topleft", ncol=ncol, inset=linset, legend=lnames, fill=cols, cex=0.52, border=NA, 
-       bty="o", bg="white", box.col="white")
+if (nominal_res_time) {
+	lnames = append(lnames, "Nominal response time")
+        cols[length(lnames)] = "red"
+        pchs[length(lnames)] = 22
+        cexs[length(lnames)] = plot_point_size 
+}
+if (ptype != "box" && no_bars) {
+	legend("topleft", ncol=ncol, inset=linset, legend=lnames, col=cols, pch=pchs, pt.bg=cols, 
+                pt.cex=cexs, cex=0.52, border=NA, bty="o", bg="white", box.col="white")
+} else {
+        # XXX cheating here for nominal response times by just plotting a filled square and not 
+        # a square point symbols. this means the legen square will havw wrong size unless 
+        # POINT_SIZE=0.75
+	legend("topleft", ncol=ncol, inset=linset, legend=lnames, fill=cols, cex=0.52, border=NA, 
+       		bty="o", bg="white", box.col="white")
+}
 
 box()
 

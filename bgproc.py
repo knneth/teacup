@@ -24,9 +24,10 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+## @package bgproc
 # Functions to manage background processes list
 #
-# $Id: bgproc.py 958 2015-02-12 04:52:49Z szander $
+# $Id: bgproc.py 1257 2015-04-20 08:20:40Z szander $
 
 import os
 import threading
@@ -34,39 +35,37 @@ from collections import namedtuple
 from fabric.api import puts, abort, local
 
 
-# background process list
+## Background process list
 proc_reg = {}
-# struct used for each entry in list
+## Struct used for each entry in list
 hostStruct = namedtuple("hostStruct", "host pid log")
-# use one simple lock to make access to prog_reg thread safe
+## Lock to make access to prog_reg thread safe
 lock = threading.Lock()
 
 
-# remove all old .start files
-# Parameters:
+## Remove all old .start files
+# @param local_dir Local directory for experiment files 
 def file_cleanup(local_dir='.'):
     local('rm -f %s/*.start' % local_dir)
 
 
-# Get key handle based on host, process name and counter
-# Parameters:
-#	host: host identifier used by Fabric
-#	name: name of the process
-#	counter: unique counter value for each process
-# Return: string handle (key)
+## Get key string handle based on host, process name and counter
+#  @param host Host identifier used by Fabric
+#  @param name Name of the process
+#  @param counter Unique counter value for each process
+#  @return String handle (key)
 def _get_handle(host='', name='', counter=''):
     # put counter before name so processes that need to be stopped early
     # (e.g. tcp_logger) are the first in the list of processes for one host
     return host + '|' + counter + '|' + name
 
 
-# register process in list
-# Parameters:
-#       host: host identifier used by Fabric
-#       name: name of the process
-#       counter: unique counter value for each process
-#	pid: process id
-#	log: log file name
+## Register process in list
+#  @param host Host identifier used by Fabric
+#  @param name Name of the process
+#  @param counter Unique counter value for each process
+#  @param pid Process id
+#  @param log Log file name
 def register_proc(host='', name='', counter='', pid='', log=''):
     handle = _get_handle(host, name, counter)
     hdata = hostStruct(host, pid, log)
@@ -79,14 +78,13 @@ def register_proc(host='', name='', counter='', pid='', log=''):
                 handle)
 
 
-# Write file that allows to register process in list later
-# Parameters:
-#       host: host identifier used by Fabric
-#       local_dir: directory for .start file
-#       name: name of the process
-#       counter: unique counter value for each process
-#       pid: process id
-#       log: log file name
+## Write .start file that allows to register process in list later
+#  @param host Host identifier used by Fabric
+#  @param local_dir Directory for .start file
+#  @param name Name of the process
+#  @param counter Unique counter value for each process
+#  @param pid Process id
+#  @param log Log file name
 def register_proc_later(
         host='', local_dir='.', name='', counter='', pid='', log=''):
     file_name = local_dir + '/' + host + '_' + \
@@ -96,9 +94,8 @@ def register_proc_later(
     f.close()
 
 
-# Register all processes based on start files
-# Parameters:
-#       local_dir: directory for .start file
+## Register all processes based on .start files
+#  @param local_dir Directory for .start file
 def register_deferred_procs(local_dir='.'):
     for fn in os.listdir(local_dir):
         if fn.endswith('.start'):
@@ -112,11 +109,10 @@ def register_deferred_procs(local_dir='.'):
             os.remove(file_name)
 
 
-# Remove process from list
-# Parameters:
-#       host: host identifier used by Fabric
-#       name: name of the process
-#       counter: unique counter value for each process
+## Remove process from list
+#  @param host Host identifier used by Fabric
+#  @param name Name of the process
+#  @param counter Unique counter value for each process
 def remove_proc(host='', name='', counter=''):
     handle = _get_handle(host, name, counter)
     with lock:
@@ -124,13 +120,11 @@ def remove_proc(host='', name='', counter=''):
             del proc_reg[handle]
 
 
-# Return pid of process
-# Parameters:
-#       host: host identifier used by Fabric
-#       name: name of the process
-#       counter: unique counter value for each process
-# Return:
-#	PID or process (if in list) or empty string (if not in list)
+## Return pid of process
+#  @param host Host identifier used by Fabric
+#  @param name Name of the process
+#  @param counter Unique counter value for each process
+#  @return PID or process (if in list) or empty string (if not in list)
 def get_proc_pid(host='', name='', counter=''):
     handle = _get_handle(host, name, counter)
     with lock:
@@ -140,13 +134,11 @@ def get_proc_pid(host='', name='', counter=''):
             return ""
 
 
-# Return log file name of process
-# Parameters:
-#       host: host identifier used by Fabric
-#       name: name of the process
-#       counter: unique counter value for each process
-# Return:
-#	log file name of process (if in list) or empty string (if not in list)
+## Return log file name of process
+#  @param host Host identifier used by Fabric
+#  @param name Name of the process
+#  @param counter Unique counter value for each process
+#  @return Log file name of process (if in list) or empty string (if not in list)
 def get_proc_log(host='', name='', counter=''):
     handle = _get_handle(host, name, counter)
     with lock:
@@ -156,8 +148,7 @@ def get_proc_log(host='', name='', counter=''):
             return ""
 
 
-# Dump process list
-# Parameters:
+## Dump process list
 def print_proc_list():
     puts('\n[MAIN] Background processes:')
     with lock:
@@ -167,17 +158,14 @@ def print_proc_list():
     puts("\n")
 
 
-# Clear process list
-# Parameters:
+## Clear process list
 def clear_proc_list():
     with lock:
         proc_reg.clear()
 
 
-# Get list of processes in list
-# Parameters:
-# Return:
-#	list of processes
+## Get list of processes in list
+#  @return List of processes
 def get_proc_list_items():
     with lock:
         return proc_reg.iteritems()

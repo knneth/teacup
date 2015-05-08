@@ -24,9 +24,10 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+## @package experiment
 # Run a single experiment
 #
-# $Id: experiment.py 1004 2015-02-18 01:35:37Z szander $
+# $Id: experiment.py 1313 2015-05-05 05:58:01Z szander $
 
 import time
 import datetime
@@ -37,6 +38,7 @@ from fabric.api import task, warn, put, puts, get, local, run, execute, \
 from fabric.network import disconnect_all
 
 import config
+from internalutil import mkdir_p
 from bgproc import file_cleanup, print_proc_list
 from runbg import stop_processes
 from hosttype import get_type_cached, get_type, clear_type_cache
@@ -47,25 +49,28 @@ from hostsetup import init_host, init_ecn, init_cc_algo, init_router, \
     init_hosts, init_os_hosts, init_host_custom, init_topology_switch, \
     init_topology_host 
 from loggers import start_tcpdump, stop_tcpdump, start_tcp_logger, \
-    stop_tcp_logger, start_dummynet_logger, stop_dummynet_logger, start_loggers, \
-    log_sysdata, log_queue_stats, log_config_params, log_host_tcp, \
-    start_bc_ping_loggers
+    stop_tcp_logger, start_loggers, log_sysdata, log_queue_stats, \
+    log_config_params, log_host_tcp, start_bc_ping_loggers
 from routersetup import init_pipe, show_pipes
-from trafficgens import start_iperf, stop_iperf, start_ping, stop_ping, \
-    start_http_server, stop_http_server, start_httperf, stop_httperf, \
-    start_httperf_dash, stop_httperf_dash, create_http_dash_content, \
+from trafficgens import start_iperf, start_ping, \
+    start_http_server, start_httperf, \
+    start_httperf_dash, create_http_dash_content, \
     create_http_incast_content, start_httperf_incast, \
-    stop_httperf_incast, start_nttcp, start_bc_ping, \
-    start_httperf_incast_n
+    start_nttcp, start_bc_ping, \
+    start_httperf_incast_n, start_fps_game
 
 
-# Collect all the arguments
+## Collect all the arguments
+#  @param _nargs Arguments
+#  @param kwargs Keyword arguments
 def _args(*_nargs, **_kwargs):
     "Collect parameters for a call"
     return _nargs, _kwargs
 
 
-# Function to replace the variable names with the values
+## Function to replace the variable names with the values
+#  @param name Name of variable
+#  @param adict Dictionary to lookup
 def _param(name, adict):
     "Get parameter value"
     val = adict.get(name, '')
@@ -75,8 +80,10 @@ def _param(name, adict):
     return val
 
 
-# Function to compare the time keys of the traffic generator list
-# Used for sorting the list in ascending order
+## Function to compare the time keys of the traffic generator list
+## Used for sorting the list in ascending order
+#  @param x First entry 
+#  @param y Second entry 
 def _cmp_timekeys(x, y):
     "Compare for time keys"
     xtime = x[0]
@@ -91,9 +98,36 @@ def _cmp_timekeys(x, y):
     return cmp(xtime, ytime)
 
 
-# Run experiment
-# Parameters:
-#	Various
+## configure queues on one router
+#  @param queue_spec Queue specification from config file 
+#  @param router Router host
+#  @param kwargs Keyword argument dictionary
+def config_router_queues(queue_spec, router, **kwargs):
+
+    for c, v in queue_spec:
+        # add the kwargs parameter to the call of _param
+        v = re.sub("(V_[a-zA-Z0-9_-]*)", "_param('\\1', kwargs)", v)
+
+        # trim white space at both ends
+        v = v.strip()
+
+        # prepend the task name
+        v = 'init_pipe, "' + str(c) + '", ' + v
+
+        # append the host to execute (router)
+        if v[-1] != ',':
+            v = v + ','
+        v = v + ' hosts = router'
+
+        _nargs, _kwargs = eval('_args(%s)' % v)
+        execute(*_nargs, **_kwargs)
+
+
+## Run experiment
+#  @param test_id Experiment ID
+#  @param test_id_pfx Experiment ID prefix
+#  @param args Arguments
+#  @param kwargs Keyword arguments
 def run_experiment(test_id='', test_id_pfx='', *args, **kwargs):
 
     do_init_os = kwargs.get('do_init_os', '1')
@@ -104,7 +138,7 @@ def run_experiment(test_id='', test_id_pfx='', *args, **kwargs):
         abort('No experiment duration specified')
 
     # create sub directory for test id prefix
-    local('mkdir -p %s' % test_id_pfx)
+    mkdir_p(test_id_pfx)
 
     # log experiment in started list
     local('echo "%s" >> experiments_started.txt' % test_id)
@@ -134,9 +168,9 @@ def run_experiment(test_id='', test_id_pfx='', *args, **kwargs):
 
     # initialise topology
     try:
-        switch = 'switch2' 
-        port_prefix = 'Gi1/0/'
-        port_offset = 5
+        switch = '' 
+        port_prefix = ''
+        port_offset = 0
         try:
             switch = config.TPCONF_topology_switch
             port_prefix = config.TPCONF_topology_switch_port_prefix
@@ -144,7 +178,8 @@ def run_experiment(test_id='', test_id_pfx='', *args, **kwargs):
         except AttributeError:
             pass 
 
-        if config.TPCONF_config_topology == '1' and do_init_os == '1':
+        if config.TPCONF_config_topology == '1' and do_init_os == '1' and  \
+           not len(config.TPCONF_router) > 1:
             # we cannot call init_topology directly, as it is decorated with
             # runs_once. in experiment.py we have empty host list whereas if we
             # run init_topology from command line we have the -H host list. executing
@@ -172,27 +207,22 @@ def run_experiment(test_id='', test_id_pfx='', *args, **kwargs):
     execute(sanity_checks)
     execute(init_hosts, *args, **kwargs)
 
-    # start queues/pipes
-    for c, v in config.TPCONF_router_queues:
-        # add the kwargs parameter to the call of _param
-        v = re.sub("(V_[a-zA-Z0-9_-]*)", "_param('\\1', kwargs)", v)
-
-        # trim white space at both ends
-        v = v.strip()
-
-        # prepend the task name
-        v = 'init_pipe, "' + str(c) + '", ' + v
-
-        # append the host to execute (router)
-        if v[-1] != ',':
-            v = v + ','
-        v = v + ' hosts = config.TPCONF_router'
-
-        _nargs, _kwargs = eval('_args(%s)' % v)
-        execute(*_nargs, **_kwargs)
-
-    # show pipe setup
-    execute(show_pipes, hosts=config.TPCONF_router)
+    # first is the legacy case with single router and single queue definitions
+    # second is the multiple router case with several routers and several queue
+    # definitions 
+    if isinstance(config.TPCONF_router_queues, list):
+        # start queues/pipes
+        config_router_queues(config.TPCONF_router_queues, config.TPCONF_router, 
+                             **kwargs)
+        # show pipe setup
+        execute(show_pipes, hosts=config.TPCONF_router)
+    elif isinstance(config.TPCONF_router_queues, dict):
+        for router in config.TPCONF_router_queues.keys():
+            # start queues/pipes for router r
+            config_router_queues(config.TPCONF_router_queues[router], [router], 
+                                 **kwargs)
+            # show pipe setup
+            execute(show_pipes, hosts=[router])
 
     # log config parameters
     execute(
@@ -221,22 +251,18 @@ def run_experiment(test_id='', test_id_pfx='', *args, **kwargs):
     # Start broadcast ping and loggers (if enabled)
     try: 
         if config.TPCONF_bc_ping_enable == '1':
-            bc_addr = ''
-            use_multicast = ''
+            # for multicast need IP of outgoing interface
+            # which is router's control interface
+            use_multicast = socket.gethostbyname(
+                    config.TPCONF_router[0].split(':')[0])
+ 
+            # get configured broadcast or multicast address
+            bc_addr = '' 
             try:
                 bc_addr = config.TPCONF_bc_ping_address
-                use_multicast = socket.gethostbyname(
-                    config.TPCONF_router[0].split(':')[0]) 
             except AttributeError:
-                pass
-
-            if bc_addr == '':
-                use_multicast = ''
-                rout_ctl_ip = socket.gethostbyname(
-                    config.TPCONF_router[0].split(':')[0])
-                addr_arr = rout_ctl_ip.split('.')
-                addr_arr[3] = '255'
-                bc_addr = '.'.join(addr_arr)
+                # use default multicast address
+                bc_addr = '224.0.1.199'
 
             execute(
                 start_bc_ping_loggers,
@@ -250,6 +276,7 @@ def run_experiment(test_id='', test_id_pfx='', *args, **kwargs):
             except AttributeError:
                 bc_ping_rate = '1'
 
+            # start the broadcst ping on the first router
             execute(start_bc_ping,
                 file_prefix=test_id,
                 local_dir=test_id_pfx,
@@ -257,7 +284,7 @@ def run_experiment(test_id='', test_id_pfx='', *args, **kwargs):
                 bc_addr=bc_addr,
                 rate=bc_ping_rate,
                 use_multicast=use_multicast,
-                hosts = config.TPCONF_router)
+                hosts = [config.TPCONF_router[0]])
     except AttributeError:
         pass
 

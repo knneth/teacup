@@ -24,9 +24,10 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+## @package hostint
 # Functions to determine the network interface based on an IP address
 #
-# $Id: hostint.py 958 2015-02-12 04:52:49Z szander $
+# $Id: hostint.py 1257 2015-04-20 08:20:40Z szander $
 
 import socket
 import config
@@ -36,18 +37,18 @@ from hosttype import get_type_cached
 from hostmac import get_netmac, get_netmac_cached
 
 
-# maps external IPs or host names to internal network interfaces
-# (automatically populated) dictionary of lists since there can be more
-# than one interface per host
+## Map external IPs or host names to internal network interfaces
+## (automatically populated) dictionary of lists since there can be more
+## than one interface per host
 host_internal_int = {}
 
-# maps external IPs or host names to external network interfaces
-# (automatically populated) dictionary of lists since there can be more
-# than one interface per host
+## Map external IPs or host names to external network interfaces
+## (automatically populated) dictionary of lists since there can be more
+## than one interface per host
 host_external_int = {}
 
-# maps internal IPs or host names to external network interfaces
-# (automatically populated)
+## Map internal IPs or host names to external network interfaces
+## (automatically populated)
 host_external_ip = {}
 
 for external, v in config.TPCONF_host_internal_ip.items():
@@ -55,23 +56,22 @@ for external, v in config.TPCONF_host_internal_ip.items():
         host_external_ip.update({internal: external})
 
 
-# maps external IPs or host names to internal Windows interfaces for
-# windump (automatically populated)
+## Map external IPs or host names to internal Windows interfaces for
+## windump (automatically populated)
 host_internal_windump_int = {}
 
-# maps external IPs or host names to internal Windows interfaces for
-# windump (automatically populated)
+## Map external IPs or host names to internal Windows interfaces for
+## windump (automatically populated)
 host_external_windump_int = {}
 
 
-# Get network interface (the first by default)
-# Parameters:
-#	host: host identifier used by Fabric
-#	int_no: interface number starting from 0 or -1 to get a list of
+## Get network interface (the first by default)
+#  @param host Host name/identifier used by Fabric
+#  @param int_no Interface number starting from 0 or -1 to get a list of
 #               all interface
-#       internal_int: '0' get external interface,
-#                     '1' get internal interface(s) (default)
-# Returns: interface name string, e.g. "em0"
+#  @param internal_int Set to '0' to get external interface,
+#                     set to '1' to get internal interface(s) (default)
+#  @return Interface name string, e.g. "em0"
 def get_netint_cached(host='', int_no=0, internal_int='1'):
     global host_internal_int
     global host_external_int
@@ -112,16 +112,15 @@ def get_netint_cached(host='', int_no=0, internal_int='1'):
         return res
 
 
-# Get network interface for windump (the first by default)
-# We need this function since windump uses a differently ordered list than
-# windows itself
-# Parameters:
-#       host: host identifier used by Fabric
-#       int_no: interface number starting from 0 or -1 to get a list of all
+## Get network interface for windump (the first by default)
+## We need this function since windump uses a differently ordered list than
+## windows itself
+#  @param host Host name/identifier used by Fabric
+#  @param int_no Interface number starting from 0 or -1 to get a list of all
 #               interfaces
-#       internal_int: '0' get external interface,
-#                     '1' get internal interface(s) (default)
-# Returns: interface name string (which is always a number), e.g. "1"
+#  @param internal_int Set to '0' to get external interface,
+#                     set to '1' to get internal interface(s) (default)
+#  @return Interface name string (which is always a number), e.g. "1"
 def get_netint_windump_cached(host='', int_no=0, internal_int='1'):
     global host_internal_windump_int
     global host_external_windump_int
@@ -167,14 +166,13 @@ def get_netint_windump_cached(host='', int_no=0, internal_int='1'):
         return res
 
 
-# Get host network interface name
-# Parameters:
-# 	int_no: interface number starting from 0 (internal only)
-#	windump: '0' get interface names used by Windows, '1' get interface
-#                name used by windump
-#	internal_int: '0' get external interface,
-#                     '1' get internal interface(s) (default)
-# Returns: interface name string, e.g. "em0"
+## Get host network interface name (TASK)
+#  @param int_no Interface number starting from 0 (internal only)
+#  @param windump Set to '0' to get interface names used by Windows, set to
+#                 '1' get interface name used by windump
+#  @param internal_int Set to '0' to get external interface,
+#                      set to '1' to get internal interface(s) (default)
+#  @return Interface name string, e.g. "em0"
 @task
 def get_netint(int_no=0, windump='0', internal_int='1'):
     "Get network interface name"
@@ -288,11 +286,11 @@ def get_netint(int_no=0, windump='0', internal_int='1'):
         abort('Cannot determine network interface for OS %s' % htype)
 
 
-# Get testbed address of host if parameter host is external address,
-# otherwise return given address
-# Parameters:
-#	host: external address
-# Returns: _first_ testbed address if host is external address, otherwise host
+## Get testbed address of host if parameter host is external address,
+## otherwise return given address
+#  @param host External (or internal) address or host name
+#  @return FIRST testbed address if host is external address, host if 
+#          host is external address
 def get_internal_ip(host):
     addresses = config.TPCONF_host_internal_ip.get(host, [])
     if len(addresses) > 0:
@@ -303,12 +301,11 @@ def get_internal_ip(host):
     return iaddr
 
 
-# Get host external IP or host name for an internal/testbed address or host name
-# Parameters:
-#	ihost: internal address
-#	do_abort: '0' do not abort if no external address found, '1' abort if no
-#              external address found
-# Returns: external address
+## Get host external IP or host name for an internal/testbed address or host name
+#  @param ihost Internal address or host name
+#  @param do_abort Set to '0' do not abort if no external address found, set to 
+#                  '1' abort if no external address found
+#  @return External address
 def get_external_ip(ihost, do_abort='1'):
 
     # return dummy value if prefix is present, should only happen if called
@@ -323,16 +320,18 @@ def get_external_ip(ihost, do_abort='1'):
     return addr
 
 
-# Get external and internal address
-# Parameters:
-#	host: internal or external address
-#	do_abort: '0' do not abort if no external address found, '1' abort if no
-#              external address found
-# Returns pair of external address and internal address
+## Get external and internal address
+#  @param host Internal or external address
+#  @param do_abort If set to '0' do not abort if no external address found, if 
+#                  set to '1' abort if no external address found
+#  @return tuple of  external address, internal address
 def get_address_pair(host, do_abort='1'):
+
     internal = get_internal_ip(host)
     if internal == host:
         external = get_external_ip(host, do_abort)
-        return (external, internal)
     else:
-        return (host, internal)
+        external = host
+
+    return (external, internal)
+

@@ -24,11 +24,13 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+## @package trafficgens
 # Traffic generators
 #
-# $Id: trafficgens.py 1000 2015-02-17 06:38:35Z szander $
+# $Id: trafficgens.py 1314 2015-05-05 06:50:00Z szander $
 
 import time
+import random
 from fabric.api import task, warn, put, local, run, execute, abort, hosts, \
     env, settings
 import bgproc
@@ -43,18 +45,17 @@ from runbg import runbg
 # nttcp
 #
 
-# Start nttcp server (UDP only)
-# Parameters:
-#       counter: unique ID
-#       file_prefix: file prefix for log file (nttcp server output)
-#       remote_dir: directory to create log file in
-#       port: listen on this port
-#       srv_host: bind to interface with this address
-#       buf_size: size of send buffer
-#       extra_params: extra params to be set
-#       check: '0' don't check for nttcp executable,
-#              '1' check for nttcp executable
-#       wait: time to wait before process is started
+## Start nttcp server (UDP only)
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (nttcp server output)
+#  @param remote_dir Directory to create log file in
+#  @param port Listen on this port
+#  @param srv_host Bind to interface with this address
+#  @param buf_size Size of send buffer
+#  @param extra_params Extra params to be set
+#  @param check '0' don't check for nttcp executable,
+#               '1' check for nttcp executable
+#  @param wait Time to wait before process is started
 def start_nttcp_server(counter='1', file_prefix='', remote_dir='',
                        port='', srv_host='', buf_size='', extra_params='',
                        check='1', wait=''):
@@ -79,21 +80,20 @@ def start_nttcp_server(counter='1', file_prefix='', remote_dir='',
     bgproc.register_proc(env.host_string, 'nttcp', counter, pid, logfile)
 
 
-# Start nttcp client (UDP only)
-# Parameters:
-#       counter: unique ID
-#       file_prefix: file prefix for log file (nttcp client output)
-#       remote_dir: directory to create log file in
-#       port: listen on this port
-#       srv_host: bind to interface with this address
-#       duration: duration in seconds
-#	interval: packet interval in milliseconds
-#	psize: size of the UDP payload (excluding IP/UDP header) in bytes
-#       buf_size: size of send buffer
-#       extra_params: extra params to be set
-#       check: '0' don't check for nttcp executable,
-#              '1' check for nttcp executable
-#       wait: time to wait before process is started
+## Start nttcp client (UDP only)
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (nttcp client output)
+#  @param remote_dir Directory to create log file in
+#  @param port Listen on this port
+#  @param srv_host Bind to interface with this address
+#  @param duration Duration in seconds
+#  @param interval Packet interval in milliseconds
+#  @param psize Size of the UDP payload (excluding IP/UDP header) in bytes
+#  @param buf_size Size of send buffer
+#  @param extra_params Extra params to be set
+#  @param check '0' don't check for nttcp executable,
+#               '1' check for nttcp executable
+#  @param wait Time to wait before process is started
 def start_nttcp_client(counter='1', file_prefix='', remote_dir='', port='',
                        srv_host='', duration='', interval='1000', psize='100',
                        buf_size='', extra_params='', check='1', wait=''):
@@ -126,11 +126,8 @@ def start_nttcp_client(counter='1', file_prefix='', remote_dir='', port='',
     bgproc.register_proc(env.host_string, 'nttcp', counter, pid, logfile)
 
 
-# Start nttcp sender and receiver
-# Parameters:
-#       see start_nttcp_client() and start_nttcp_server()
-#	local_dir: local directory to put files in (not used)
-#@task
+## Start nttcp sender and receiver
+## For parameters see start_nttcp_client() and start_nttcp_server()
 def start_nttcp(counter='1', file_prefix='', remote_dir='', local_dir='',
                 port='', client='', server='', duration='', interval='', psize='',
                 buf_size='', extra_params_client='', extra_params_server='',
@@ -147,34 +144,27 @@ def start_nttcp(counter='1', file_prefix='', remote_dir='', local_dir='',
             extra_params_client, check, wait, hosts=[client])
 
 
-#@task
-def stop_nttcp(counter='1', file_prefix='', remote_dir='', local_dir="."):
-    "Stop nttcp (NOT IMPLEMENTED)"
-    pass
-
-
 #
 # iperf
 #
 
-# Start iperf server
-# Parameters:
-#	counter: unique ID
-#	file_prefix: file prefix for log file (iperf server output)
-#	remote_dir: directory to create log file in
-#	port: listen on this port
-#	srv_host: bind to interface with this address
-#       duration: duration in seconds (only used if kill='1')
-#       mss: maximum segment size
-#       buf_size: size of send and receive buffer
-#                 (assumes iperf modified with CAIA patch)
-#	proto: must be 'tcp' or 'udp'
-#	extra_params: extra params to be set
-#	check: '0' don't check for iperf executable, '1' check for iperf executable
-#	wait: time to wait before process is started
-#       kill: '0' server will terminate according to duration (default),
-#             '1' kill server after duration to work around
-#               "feature" in iperf that prevents it from stopping after duration
+## Start iperf server
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param port Listen on this port
+#  @param srv_host Bind to interface with this address
+#  @param duration Duration in seconds (only used if kill='1')
+#  @param mss Maximum segment size
+#  @param buf_size Size of send and receive buffer
+#                  (assumes iperf modified with CAIA patch)
+#  @param proto Must be 'tcp' or 'udp'
+#  @param extra_params Extra params to be set
+#  @param check '0' don't check for iperf executable, '1' check for iperf executable
+#  @param wait Time to wait before process is started
+#  @param kill If '0' server will terminate according to duration (default),
+#              if '1' kill server after duration to work around
+#              "feature" in iperf that prevents it from stopping after duration
 def start_iperf_server(counter='1', file_prefix='', remote_dir='', port='',
                        srv_host='', duration='', mss='', buf_size='', proto='tcp',
                        extra_params='', check='1', wait='', kill='0'):
@@ -219,27 +209,26 @@ def start_iperf_server(counter='1', file_prefix='', remote_dir='', port='',
         bgproc.register_proc(env.host_string, 'kill_iperf', counter, pid, '')
 
 
-# Start iperf client
-# Parameters:
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#       port: listen on this port
-#       srv_host: bind to interface with this address
-# 	duration: duration in seconds
-#	congestion_algo: congestion control algo to use (Linux only!)
-#       mss: maximum segment size
-#       buf_size: size of send and receive buffer
-#                 (assumes iperf modified with CAIA patch)
-#       proto: must be 'tcp' or 'udp'
-# 	bandw: bandwidth in n[KM] (K for kilo, M for mega)
-#       extra_params: extra params to be set
-#       check: '0' don't check for iperf executable,
-#              '1' check for iperf executable
-#       wait: time to wait before process is started
-#       kill: '0' client will terminate according to duration (default),
-#             '1' kill client after duration to work around
-#               "feature" in iperf that prevents it from stopping after duration
+## Start iperf client
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param port Listen on this port
+#  @param srv_host Bind to interface with this address
+#  @param duration Duration in seconds
+#  @param congestion_algo Congestion control algo to use (Linux only!)
+#  @param mss Maximum segment size
+#  @param buf_size Size of send and receive buffer
+#                  (assumes iperf modified with CAIA patch)
+#  @param proto Must be 'tcp' or 'udp'
+#  @param bandw Bandwidth in n[KM] (K for kilo, M for mega)
+#  @param extra_params Extra params to be set
+#  @param check '0' don't check for iperf executable,
+#               '1' check for iperf executable
+#  @param wait Time to wait before process is started
+#  @param kill If '0' client will terminate according to duration (default),
+#              if '1' kill client after duration to work around
+#              "feature" in iperf that prevents it from stopping after duration
 def start_iperf_client(counter='1', file_prefix='', remote_dir='', port='',
                        srv_host='', duration='', congestion_algo='', mss='',
                        buf_size='', proto='tcp', bandw='', extra_params='',
@@ -294,14 +283,8 @@ def start_iperf_client(counter='1', file_prefix='', remote_dir='', port='',
         bgproc.register_proc(env.host_string, 'kill_iperf', counter, pid, '')
 
 
-# Start iperf sender and receiver
-# Parameters:
-#	see start_iperf_client() and start_iperf_server()
-#       local_dir: local directory to put files in (not used)
-#	kill: '0' client and server will terminate according to duration (default),
-#             '1' kill client/server after duration to work around
-#		"feature" in iperf that prevents it from stopping after duration
-#@task
+## Start iperf sender and receiver
+## For parameters see start_iperf_client() and start_iperf_server()
 def start_iperf(counter='1', file_prefix='', remote_dir='', local_dir='',
                 port='', client='', server='', duration='', congestion_algo='',
                 mss='', buf_size='', proto='tcp', rate='', extra_params_client='',
@@ -318,48 +301,20 @@ def start_iperf(counter='1', file_prefix='', remote_dir='', local_dir='',
             proto, rate, extra_params_client, check, wait, kill, hosts=[client])
 
 
-# Stop iperf sender and receiver
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#	local_dir: local dir to copy log file into
-#@task
-def stop_iperf(counter='1', file_prefix='', remote_dir='', local_dir="."):
-    "Stop iperf traffic sender and receiver"
-
-    pid = bgproc.get_proc_pid(env.host_string, 'iperf', counter)
-
-    with settings(warn_only=True):
-        if pid != '':
-            run('kill %s' % pid, pty=False)
-        else:
-            run('killall iperf', pty=False)
-
-    if file_prefix != '' or remote_dir != '':
-        file_name = remote_dir + file_prefix + '_' + \
-            env.host_string.replace(':', '_') + '_' + counter + '_iperf.log'
-    else:
-        file_name = bgproc.get_proc_log(env.host_string, 'iperf', counter)
-
-    getfile(file_name, local_dir)
-    bgproc.remove_proc(env.host_string, 'iperf', counter)
-
-
 #
 # ping
 #
 
-# Start ping
-# Parameters:
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#       dest: target to ping
-#       duration: duration in seconds
-#	rate: number of pings per second
-#	extra_params: other parameters passed directly to ping
-#       check: '0' don't check for ping executable, '1' check for ping executable
-#       wait: time to wait before process is started
+## Start ping
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param dest Target to ping
+#  @param duration Duration in seconds
+#  @param rate Number of pings per second
+#  @param extra_params Other parameters passed directly to ping
+#  @param check: '0' don't check for ping executable, '1' check for ping executable
+#  @param wait: time to wait before process is started
 def _start_ping(counter='1', file_prefix='', remote_dir='', dest='',
                 duration='', rate='1', extra_params='', check='1', wait=''):
 
@@ -393,11 +348,18 @@ def _start_ping(counter='1', file_prefix='', remote_dir='', dest='',
     bgproc.register_proc(env.host_string, 'ping', counter, pid, logfile)
 
 
-# Start ping wrapper
-# Parameters:
-#	see _start_ping()
-#       local_dir: local directory to put files in (not used)
-#@task
+## Start ping wrapper
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param local_dir Unused
+#  @param client Host to run ping on
+#  @param dest Target to ping
+#  @param duration Duration in seconds
+#  @param rate Number of pings per second
+#  @param extra_params Other parameters passed directly to ping
+#  @param check: '0' don't check for ping executable, '1' check for ping executable
+#  @param wait: time to wait before process is started
 def start_ping(counter='1', file_prefix='', remote_dir='', local_dir='',
                client='', dest='', duration='', rate='1', extra_params='',
                check='1', wait=''):
@@ -424,41 +386,13 @@ def start_ping(counter='1', file_prefix='', remote_dir='', local_dir='',
         hosts=[client])
 
 
-# Stop ping
-# Parameters:
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#	local_dir: local directory to copy log file into
-#@task
-def stop_ping(counter='1', file_prefix='', remote_dir='', local_dir="."):
-    "Stop ping"
-
-    pid = bgproc.get_proc_pid(env.host_string, 'ping', counter)
-    with settings(warn_only=True):
-        if pid != "":
-            run('kill %s' % pid, pty=False)
-        else:
-            run('killall ping', pty=False)
-
-    if file_prefix != "" or remote_dir != "":
-        file_name = remote_dir + file_prefix + '_' + \
-            env.host_string.replace(':', '_') + '_' + counter + '_ping.log'
-    else:
-        file_name = bgproc.get_proc_log(env.host_string, 'ping', counter)
-
-    getfile(file_name, local_dir)
-    bgproc.remove_proc(env.host_string, 'ping', counter)
-
-
 #
 # httperf
 #
 
 
-# Return default document root depending on host OS
-# Parameters:
-# 	htype: host type string
+## Return default document root depending on host OS
+#  @param htype Host type string
 def _get_document_root(htype):
     if htype == 'FreeBSD':
         docroot = '/usr/local/www/data'
@@ -470,18 +404,18 @@ def _get_document_root(htype):
     return docroot
 
 
-# Start lighttpd web server
-# Parameters:
-#	counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#       local_dir: local directory to put files in
-#	port: port to listen to
-#	config_dir: directory that contains config file
-#	config_in: config file template to use
-#	docroot: document root on server
-# check: '0' don't check for lighttpd executable, '1' check for lighttpd
-# executable
+## Start lighttpd web server
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param local_dir Local directory to put files in
+#  @param port Port to listen to
+#  @param config_dir Directory that contains config file
+#  @param config_in Config file template to use
+#  @param docroot Document root on server
+#  @param check If '0' don't check for lighttpd executable, if '1' check for 
+#               lighttpd executable
+#  @param wait: time to wait before process is started
 def _start_http_server(counter='1', file_prefix='', remote_dir='',
                        local_dir='', port='', config_dir='', config_in='',
                        docroot='', check='1'):
@@ -561,20 +495,20 @@ def _start_http_server(counter='1', file_prefix='', remote_dir='',
     bgproc.register_proc(env.host_string, 'lighttpd', counter, pid, logfile)
 
 
-# Start lighttpd web server wrapper
-# Parameters:
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#       local_dir: local directory to put files in
-#	server: host to run server on
-#       port: port to listen to
-#       config_dir: directory that contains config file
-#       config_in: config file template to use
-#       docroot: document root on server
-#       check: '0' don't check for lighttpd executable,
-#              '1' check for lighttpd executable
-#@task
+## Start lighttpd web server wrapper
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param server Server host 
+#  @param local_dir Directory to create log file in
+#  @param local_dir Local directory to put files in
+#  @param port Port to listen to
+#  @param config_dir Directory that contains config file
+#  @param config_in Config file template to use
+#  @param docroot Document root on server
+#  @param check If '0' don't check for lighttpd executable, if '1' check for 
+#               lighttpd executable
+#  @param wait: time to wait before process is started
 def start_http_server(counter='1', file_prefix='', remote_dir='', local_dir='',
                       server='', port='', config_dir='', config_in='', docroot='',
                       check='1', wait=''):
@@ -597,14 +531,14 @@ def start_http_server(counter='1', file_prefix='', remote_dir='', local_dir='',
         hosts=[server])
 
 
-# Create DASH content on web server
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       local_dir: local directory to put files in
-#       docroot: document root on server
-#	duration: duration of 'video' files in seconds
-#	rates: comma-separated list of 'video' rates
-#	cycles: comma-separated list of cycle times
+## Create DASH content on web server
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param local_dir Local directory to put files in
+#  @param docroot Document root on server
+#  @param duration Duration of 'video' files in seconds
+#  @param rates Comma-separated list of 'video' rates
+#  @param cycles Comma-separated list of cycle times
 def _create_http_dash_content(
         counter='1', file_prefix='', local_dir='', docroot='', duration='',
         rates='', cycles=''):
@@ -632,19 +566,18 @@ def _create_http_dash_content(
         (docroot, script_file, script_file), pty=False)
 
 
-# Create DASH content on web server wrapper
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: not used, only for symmetry with the other functions
-#       local_dir: local directory to put files in
-#       server: host to run server on
-#       docroot: document root on server
-#       duration: duration of 'video' files in seconds
-#       rates: comma-separated list of 'video' rates
-#       cycles: comma-separated list of cycle times
-#	check: not used, only for symmetry with the other functions
-#	wait: not used, only for symmetry with the other functions
-#@task
+## Create DASH content on web server wrapper
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Not used, only for symmetry with the other functions
+#  @param local_dir Local directory to put files in
+#  @param server Host to run server on
+#  @param docroot Document root on server
+#  @param duration Duration of 'video' files in seconds
+#  @param rates Comma-separated list of 'video' rates
+#  @param cycles Comma-separated list of cycle times
+#  @param check Not used, only for symmetry with the other functions
+#  @param wait Not used, only for symmetry with the other functions
 def create_http_dash_content(
         counter='1', file_prefix='', remote_dir='', local_dir='',
         server='', docroot='', duration='', rates='', cycles='',
@@ -666,13 +599,13 @@ def create_http_dash_content(
         hosts=[server])
 
 
-# Create incast content on web server
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       local_dir: local directory to put files in
-#       docroot: document root on server
-#       duration: not used
-#       sizes: comma-separated list of file sizes
+## Create incast content on web server
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param local_dir Local directory to put files in
+#  @param docroot Document root on server
+#  @param duration Not used
+#  @param sizes Comma-separated list of file sizes
 def _create_http_incast_content(
         counter='1', file_prefix='', local_dir='', docroot='', duration='',
         sizes=''):
@@ -700,18 +633,17 @@ def _create_http_incast_content(
         (docroot, script_file, script_file), pty=False)
 
 
-# Create incast content on web server wrapper
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: not used, only for symmetry with the other functions
-#       local_dir: local directory to put files in
-#       server: host to run server on
-#       docroot: document root on server
-#       duration: not used
-#       sizes: comma-separated list of file sizes
-#	check: not used, only for symmetry with the other functions
-#	wait: not used, only for symmetry with the other functions
-#@task
+## Create incast content on web server wrapper
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Not used, only for symmetry with the other functions
+#  @param local_dir Local directory to put files in
+#  @param server Host to run server on
+#  @param docroot Document root on server
+#  @param duration Not used
+#  @param sizes Comma-separated list of file sizes
+#  @param check Not used, only for symmetry with the other functions
+#  @param wait Not used, only for symmetry with the other functions
 def create_http_incast_content(
         counter='1', file_prefix='', remote_dir='',
         local_dir='', server='', docroot='', duration='', sizes='', check='1',
@@ -732,36 +664,27 @@ def create_http_incast_content(
         hosts=[server])
 
 
-# XXX not implemented yet cause we have stop_processes
-#@task
-def stop_http_server(
-        counter='1', file_prefix='', remote_dir='', local_dir="."):
-    "Stop HTTP server (NOT IMPLEMENTED)"
-    pass
-
-
-# Start httperf
-# Parameters:
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#	port: server port
-#	server: server host
-#	conns: number of connections
-#	rate: connections per second
-#	timeout: timeout for each connection
-#	calls: number of calls
-#	burst: length of burst
-#	wsesslog: session description (requests to send)
-#	wsesslog_timeout: default timeout for session in wsesslog
-#	period: time between sessions/bursts
-#	sessions: number of sessions
-#	call_stats: maximum number of slots for call_stats
-#                   (one usef for each request)
-#	extra_params: extra parameters
-#       check: '0' don't check for ping executable,
-#              '1' check for ping executable
-#       wait: time to wait before process is started
+## Start httperf
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param port Server port
+#  @param server Server host
+#  @param conns Number of connections
+#  @param rate Connections per second
+#  @param timeout Timeout for each connection
+#  @param calls Number of calls
+#  @param burst Length of burst
+#  @param wsesslog Session description (requests to send)
+#  @param wsesslog_timeout Default timeout for session in wsesslog
+#  @param period Time between sessions/bursts
+#  @param sessions Number of sessions
+#  @param call_stats Maximum number of slots for call_stats
+#                    (one usef for each request)
+#  @param extra_params Extra parameters
+#  @param check If '0' don't check for ping executable,
+#               if '1' check for ping executable
+#  @param wait Time to wait before process is started
 def _start_httperf(counter='1', name='httperf', file_prefix='', remote_dir='',
                    port='80', server='', conns='', rate='', timeout='',
                    calls='', burst='', wsesslog='', wsesslog_timeout='0',
@@ -816,28 +739,27 @@ def _start_httperf(counter='1', name='httperf', file_prefix='', remote_dir='',
     bgproc.register_proc(env.host_string, name, counter, pid, logfile)
 
 
-# Start httperf wrapper
-# Parameters:
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#       local_dir: local directory to put files in (not used)
-#       port: server port
-#       client: client host
-#       server: server host
-#       conns: number of connections
-#       rate: connections per second
-#       timeout: timeout for each connection
-#       calls: number of calls
-#       burst: length of burst
-#       wsesslog: session description (requests to send)
-#       wsesslog_timeout: default timeout for session in wsesslog
-#       period: time between sessions/bursts
-#       sessions: number of sessions
-#       extra_params: extra parameters
-#       check: '0' don't check for ping executable, '1' check for ping executable
-#       wait: time to wait before process is started
-#@task
+## Start httperf wrapper
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param local_dir Local directory to put files in (not used)
+#  @param port Server port
+#  @param client Client host
+#  @param server Server host
+#  @param conns Number of connections
+#  @param rate Connections per second
+#  @param timeout Timeout for each connection
+#  @param calls Number of calls
+#  @param burst Length of burst
+#  @param wsesslog Session description (requests to send)
+#  @param wsesslog_timeout Default timeout for session in wsesslog
+#  @param period Time between sessions/bursts
+#  @param sessions Number of sessions
+#  @param extra_params Extra parameters
+#  @param check If '0' don't check for ping executable,
+#               if '1' check for ping executable
+#  @param wait Time to wait before process is started
 def start_httperf(counter='1', file_prefix='', remote_dir='', local_dir='', port='',
                   client='', server='', conns='', rate='', timeout='', calls='',
                   burst='', wsesslog='', wsesslog_timeout='', period='', sessions='1',
@@ -859,32 +781,25 @@ def start_httperf(counter='1', file_prefix='', remote_dir='', local_dir='', port
             extra_params=extra_params, check=check, wait=wait, hosts=[client])
 
 
-# XXX not implemented yet cause we have stop_processes
-#@task
-def stop_httperf(counter='1', file_prefix='', remote_dir='', local_dir="."):
-    "Stop httperf (NOT IMPLEMENTED)"
-    pass
-
-
-# Start httperf DASH-like client
-# Parameters:
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#       local_dir: local directory to put files in
-#       port: server port
-#       server: server host
-#       duration: duration of session in seconds
-#	rate: DASH rate in kbps
-#	cycle: cycle length in seconds
-#	prefetch: prefetch time in seconds of 'content' to prefetch
-#                 (specified as float) (default = 0.0)
-#       extra_params: extra parameters
-#       with_timeout: '0' no timeouts for requests (default),
-#                     '1' with timeouts for request
-#	(httperf will close connection if timeout expires and start a new connection)
-#       check: '0' don't check for ping executable, '1' check for ping executable
-#       wait: time to wait before process is started
+## Start httperf DASH-like client
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param local_dir Local directory to put files in
+#  @param port Server port
+#  @param server Server host
+#  @param duration Duration of session in seconds
+#  @param rate DASH rate in kbps
+#  @param cycle Cycle length in seconds
+#  @param prefetch Prefetch time in seconds of 'content' to prefetch
+#                  (specified as float) (default = 0.0)
+#  @param prefetch_timeout Timeout during prefetch phase
+#  @param extra_params Extra parameters
+#  @param with_timeout '0' no timeouts for requests (default),
+#                      '1' with timeouts for request (httperf will close connection 
+#                          if timeout expires and end session)
+#  @param check '0' don't check for ping executable, '1' check for ping executable
+#  @param wait Time to wait before process is started
 def _start_httperf_dash(
         counter='1', file_prefix='', remote_dir='', local_dir='',
         port='', server='', duration='', rate='', cycle='', prefetch='0.0',
@@ -897,9 +812,17 @@ def _start_httperf_dash(
     wlog_local = local_dir + '/' + wlog
     cpath = "/tmp/" + wlog
 
+    # determine number of requests dpeending on duration and cycle length
+    # round down to nearest integer, so the actual duration may be up to a cycle
+    # shorter then duration (it must kept shorter than duration to collect
+    # httperf log file)
     play_cnt = int(float(duration) / float(cycle))
-    # allow for a tiny bit of slack with the cycles
+
+    # with timeout for chplay chunk fetching, allow for a tiny bit of slack 
+    # with the cycles by multiplying with 1.01
     play_timeout = str(float(cycle) * 1.01)
+    
+    # now determine size of play chunk in bytes
     play_chunk_size = str(float(cycle) * float(rate) * 1000 / 8)
 
     local('rm -f %s ; touch %s' % (wlog_local, wlog_local))
@@ -919,7 +842,7 @@ def _start_httperf_dash(
                 'echo %s/0 size=%s pace_time=0 timeout=%s headers=\\\'Range: '
                 'bytes=0-%s\\\' >> %s' %
                 (spath,
-                 chunk_size,
+                 prefetch_chunk_size,
                  prefetch_timeout,
                  prefetch_last_byte,
                  wlog_local))
@@ -942,7 +865,7 @@ def _start_httperf_dash(
                 'echo %s/%s size=%s pace_time=%s timeout=%s >> %s' %
                 (spath,
                  str(calls),
-                    chunk_size,
+                    play_chunk_size,
                     cycle,
                     play_timeout,
                     wlog_local))
@@ -965,27 +888,26 @@ def _start_httperf_dash(
             extra_params=extra_params, check=check, wait=wait)
 
 
-# Start httperf DASH-like client wrapper
-# Parameters:
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#       local_dir: local directory to put files in
-#       port: server port
-#	client: client host
-#       server: server host
-#       duration: duration of session in seconds
-#       rate: DASH rate in kbps
-#       cycle: cycle length in seconds
-#       prefetch: prefetch time in seconds of 'content' to prefetch
-#                 (currently must be multiple of cycle)
-#       extra_params: extra parameters
-#       with_timeout: '0' no timeouts for requests (default),
-#                     '1' with timeouts for request
-#       (httperf will close connection if timeout expires and start a new connection)
-#       check: '0' don't check for ping executable, '1' check for ping executable
-#       wait: time to wait before process is started
-#@task
+## Start httperf DASH-like client wrapper
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param local_dir Local directory to put files in
+#  @param port Server port
+#  @param client Client host
+#  @param server Server host
+#  @param duration Duration of session in seconds
+#  @param rate DASH rate in kbps
+#  @param cycle Cycle length in seconds
+#  @param prefetch Prefetch time in seconds of 'content' to prefetch
+#                  (specified as float) (default = 0.0)
+#  @param prefetch_timeout Timeout during prefetch phase
+#  @param extra_params Extra parameters
+#  @param with_timeout '0' no timeouts for requests (default),
+#                      '1' with timeouts for request (httperf will close connection 
+#                          if timeout expires and start a new connection)
+#  @param check '0' don't check for ping executable, '1' check for ping executable
+#  @param wait Time to wait before process is started
 def start_httperf_dash(counter='1', file_prefix='', remote_dir='', local_dir='',
                        port='', client='', server='', duration='', rate='', cycle='',
                        prefetch='', prefetch_timeout='', extra_params='',
@@ -1002,28 +924,20 @@ def start_httperf_dash(counter='1', file_prefix='', remote_dir='', local_dir='',
             extra_params, with_timeout, check, wait, hosts=[client])
 
 
-#@task
-def stop_httperf_dash(
-        counter='1', file_prefix='', remote_dir='', local_dir="."):
-    "Stop httperf DASH client (NOT IMPLEMENTED)"
-    pass
-
-
-# Start httperf incast congestion querier
-# Parameters:
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#       local_dir: local directory to put files in
-#       servers: comma-separated list of servers
-#                (server1:port1,server2:port2,...,serverN:portN)
-#       duration: duration of session in seconds
-#       period: time between queries
-#       burst_size: number of queries to send to each server
-#       response_size: size of the response in kB
-#       extra_params: extra parameters
-#       check: '0' don't check for ping executable, '1' check for ping executable
-#       wait: time to wait before process is started
+## Start httperf incast congestion querier
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param local_dir Local directory to put files in
+#  @param servers Comma-separated list of servers
+#                 (server1:port1,server2:port2,...,serverN:portN)
+#  @param duration Duration of session in seconds
+#  @param period Time between queries
+#  @param burst_size Number of queries to send to each server
+#  @param response_size Size of the response in kB
+#  @param extra_params Extra parameters
+#  @param check: '0' don't check for ping executable, '1' check for ping executable
+#  @param wait: time to wait before process is started
 def _start_httperf_incast(
         counter='1', file_prefix='', remote_dir='', local_dir='', servers='',
         duration='', period='', burst_size='', response_size='', extra_params='',
@@ -1035,7 +949,7 @@ def _start_httperf_incast(
     wlog_local = local_dir + '/' + wlog
     cpath = '/tmp/' + wlog
 
-    request_cnt = int(duration) / int(period)
+    request_cnt = int(float(duration) / float(period))
     if burst_size == '':
         burst_size = '1'
     burst_cnt = int(burst_size) - 1
@@ -1091,23 +1005,21 @@ def _start_httperf_incast(
             extra_params=extra_params, check=check, wait=wait)
 
 
-# Start httperf incast congestion querier wrapper
-# Parameters:
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#       local_dir: local directory to put files in
-# 	client: client host
-#       servers: comma-separated list of servers
-#                (server1:port,server2:port,...,serverN:port)
-#       duration: duration of session in seconds
-#       period: time between queries
-#       burst_size: number of queries to send to each server
-#       response_size: size of the response in kB
-#       extra_params: extra parameters
-#       check: '0' don't check for ping executable, '1' check for ping executable
-#       wait: time to wait before process is started
-#@task
+## Start httperf incast congestion querier wrapper
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param local_dir Local directory to put files in
+#  @param client Client host
+#  @param servers Comma-separated list of servers
+#                 (server1:port1,server2:port2,...,serverN:portN)
+#  @param duration Duration of session in seconds
+#  @param period Time between queries
+#  @param burst_size Number of queries to send to each server
+#  @param response_size Size of the response in kB
+#  @param extra_params Extra parameters
+#  @param check: '0' don't check for ping executable, '1' check for ping executable
+#  @param wait: time to wait before process is started
 def start_httperf_incast(
         counter='1', file_prefix='', remote_dir='', local_dir='', client='', servers='',
         duration='', period='', burst_size='', response_size='', extra_params='',
@@ -1135,38 +1047,28 @@ def start_httperf_incast(
         hosts=[client])
 
 
-#@task
-def stop_httperf_incast(
-        counter='1', file_prefix='', remote_dir='', local_dir="."):
-    "Stop httperf incast client (NOT IMPLEMENTED)"
-    pass
-
-
-# Start incast with n responders
-# Parameters:
-#       counter: unique ID
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#       local_dir: local directory to put files in
-#       client: client host
-#       servers: comma-separated list of all possible servers, but only num_responders
-#                are used
-#                (server1:port,server2:port,...,serverN:port)
-#       duration: duration of session in seconds
-#       period: time between queries
-#       burst_size: number of queries to send to each server
-#       response_size: size of the response in kB
-# 	server_port_start: first server port to use, each server will run on different
-#                          consecutive port starting with this port number
-#       config_dir: directory that contains config file
-#       config_in: config file template to use
-#       docroot: document root on server
-#       sizes: comma-separated list of file sizes on server
-#       num_responders: number of responders actually used
-#       extra_params: extra parameters
-#       check: '0' don't check for executable, '1' check for executable
-#       wait: time to wait before process is started
-#@task
+## Start incast with n responders
+#  @param counter Unique start ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param local_dir Local directory to put files in
+#  @param client Client host
+#  @param servers Comma-separated list of servers
+#                 (server1:port1,server2:port2,...,serverN:portN)
+#  @param duration Duration of session in seconds
+#  @param period Time between queries
+#  @param burst_size Number of queries to send to each server
+#  @param response_size Size of the response in kB
+#  @param server_port_start first server port to use, each server will run on different
+#                           consecutive port starting with this port number
+#  @param config_dir Directory that contains config file
+#  @param config_in Config file template to use
+#  @param docroot Document root on server
+#  @param sizes Comma-separated list of file sizes on server
+#  @param num_responders Number of responders actually used
+#  @param extra_params Extra parameters
+#  @param check: '0' don't check for ping executable, '1' check for ping executable
+#  @param wait: time to wait before process is started
 def start_httperf_incast_n(
         counter='1', file_prefix='', remote_dir='', local_dir='', client='', servers='',
         duration='', period='', burst_size='', response_size='', server_port_start='', 
@@ -1253,18 +1155,16 @@ def start_httperf_incast_n(
         hosts=[client])
 
 
-# Start broadcast ping for post timestamp correction
-# Router does the broadcast as control host in jail may not be able to
-# Broadcast on the control subnet, so we don't interfere with data traffic
-# Parameters:
-#       file_prefix: file prefix for log file (iperf server output)
-#       remote_dir: directory to create log file in
-#       local_dir: local directory to put files in
-#	bc_addr: broadcast or multicast address
-#	rate: pings per second
-#       use_multicast: '' use broadcast address (default) 
-#                      'interface' IP of the outgoing interface 
-#@task
+## Start broadcast ping for post timestamp correction
+## Router does the broadcast as control host in jail may not be able to
+## Broadcast on the control subnet, so we don't interfere with data traffic
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param local_dir Local directory to put files in
+#  @param bc_addr Broadcast or multicast address
+#  @param rate Number of pings per second
+#  @param use_multicast Empty string means use broadcast address (default), 
+#                       otherwise must set this to IP of the outgoing interface 
 def start_bc_ping(file_prefix='', remote_dir='', local_dir='', bc_addr='', 
                   rate='1', use_multicast=''):
     "Start broadcast ping"
@@ -1295,8 +1195,211 @@ def start_bc_ping(file_prefix='', remote_dir='', local_dir='', bc_addr='',
     bgproc.register_proc(env.host_string, name, '0', pid, logfile)
 
 
-#@task
-def stop_bc_ping(file_prefix='', remote_dir='', local_dir=''):
-    "Stop broadcast ping (NOT IMPLEMENTED)"
-    pass
+## Start server-to-client single traffic flow with BITSS pktgen
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param local_dir Local directory to put files in
+#  @param game_type Set to q3, hl2cs, hl2dm, hlcs, hldm, et2pro or q4
+#  @param client_num Total number of clients
+#  @param port Client port
+#  @param src_port Server port
+#  @param client Client IP or name
+#  @param pkt_interval Packet interval in seconds
+#  @param duration Duration of traffic in seconds
+#  @param extra_params Extra params to be set
+#  @param check '0' don't check for pktgen executable,
+#              '1' check for pktgen executable
+#  @param wait Time to wait before process is started
+def _start_s2c_game(counter='', file_prefix='', remote_dir='', local_dir='', 
+                game_type='q3', client_num='', port='', src_port='', client='', 
+                pkt_interval='0.05', duration='', extra_params='', check='1', wait=''):
+    "Start s2c game traffic flow"
+
+    if client_num == '':
+        abort('Must specify number of clients with client_num')
+    if client == '':
+        abort('Must specify client')
+    if port == '':
+        abort('Must specify port')
+
+    if check == '1':
+        # make sure we have pktgen 
+        run('which pktgen.sh', pty=False)
+
+    # get client's internal address
+    dummy, client_internal = get_address_pair(client) 
+
+    # start pktgen 
+    logfile = remote_dir + file_prefix + '_' + \
+        env.host_string.replace(':', '_') + '_' + counter + '_pktgen.log'
+    pktgen_cmd = 'pktgen.sh -w -game %s -N %s -IP %s -port %s -sport %s -iat %s -secs %s' % \
+                 (game_type, client_num, client_internal, port, src_port, pkt_interval, 
+                  duration)
+    if extra_params != '':
+        pktgen_cmd += ' ' + extra_params
+
+    pid = runbg(pktgen_cmd, wait, out_file=logfile)
+    bgproc.register_proc(env.host_string, 'pktgen', counter, pid, logfile)
+
+
+## Start client-to-server single traffic flow with BITSS pktgen
+#  @param counter Unique ID
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param local_dir Local directory to put files in
+#  @param game_type Set to q3, hl2cs, hl2dm, hlcs, hldm, et2pro or q4
+#  @param client_num Total number of clients
+#  @param port Client port
+#  @param src_port Server port
+#  @param server Client IP or name
+#  @param pkt_interval Packet interval in seconds
+#  @param psize Packet size in bytes
+#  @param duration Duration of traffic in seconds
+#  @param extra_params Extra params to be set
+#  @param check '0' don't check for pktgen executable,
+#               '1' check for pktgen executable
+#  @param wait Time to wait before process is started
+def _start_c2s_game(counter='', file_prefix='', remote_dir='', local_dir='', 
+                game_type='q3', client_num='', port='', src_port='', server='', 
+                pkt_interval='0.05', psize='60', duration='', extra_params='', 
+                check='1', wait=''):
+    "Start c2s game traffic flow"
+
+    if client_num == '':
+        abort('Must specify number of clients with client_num')
+    if server == '':
+        abort('Must specify server')
+    if port == '':
+        abort('Must specify port')
+
+    if check == '1':
+        # make sure we have pktgen 
+        run('which pktgen.sh', pty=False)
+
+    # get client's internal address
+    dummy, server_internal = get_address_pair(server)
+
+    # start pktgen 
+    logfile = remote_dir + file_prefix + '_' + \
+        env.host_string.replace(':', '_') + '_' + counter + '_pktgen.log'
+    pktgen_cmd = 'pktgen.sh -c -game %s -N %s -IP %s -port %s -sport %s -iat %s ' \
+                 '-secs %s -c2s_psize %s' % \
+                 (game_type, client_num, server_internal, port, src_port, 
+                  pkt_interval, duration, psize)
+    if extra_params != '':
+        pktgen_cmd += ' ' + extra_params
+
+    pid = runbg(pktgen_cmd, wait, out_file=logfile)
+    bgproc.register_proc(env.host_string, 'pktgen', counter, pid, logfile)
+
+
+## Start emulated FPS game traffic session with one server and n clients
+## For server to client traffic we run the BITSS tool n times
+## For client to server traffic we run nttcp in UDP mode to send from each
+## client to the server (not very realistic but BITSS has not produced a
+## client to server sending tool)
+#  @param counter Unique ID start
+#  @param file_prefix File prefix for log file (iperf server output)
+#  @param remote_dir Directory to create log file in
+#  @param local_dir Local directory to put files in
+#  @param clients Comma-separated list of clients (name|IP:port) 
+#  @param server Server (name|IP:port) 
+#  @param game_type Set to q3, hl2cs, hl2dm, hlcs, hldm, et2pro or q4
+#  @param c2s_interval Interval of client to server packets in seconds 
+#  @param c2s_psize Packet size of client to server packets in bytes
+#                   (size of UDP data)
+#  @param s2c_interval Interval of server to client packets in seconds 
+#  @param duration Duration of game in seconds
+#  @param client_start_delay Number of seconds clients are started after servers
+#                            are started
+#  @param extra_params_client Extra params to be set for clients
+#  @param extra_params_server Extra params to be set for server 
+#  @param check '0' don't check for executable,
+#               '1' check for executable
+#  @param wait Time to wait before process is started
+def start_fps_game(counter='', file_prefix='', remote_dir='', local_dir='', clients='',
+                  server='', game_type='q3', c2s_interval='0.01', c2s_psize='60',
+		  s2c_interval='0.05', duration='', client_start_delay='3.0',
+                  extra_params_client='', extra_params_server='', check='1', wait=''):
+    "Start FPS game traffic"
+
+    if clients == '':
+        abort('Must specify at least one client with clients')
+    if server == '':
+        abort('Must specify server')
+
+    counter = int(counter)
+
+    fields = server.split(':')
+    server_name = fields[0]
+    server_port = '27960' # not used yet
+    if len(fields) > 1:
+        server_port = fields[1]
+
+    clients_list = clients.split(',')
+    # make sure number of clients is within pktgen's allowed range 
+    if len(clients_list) < 4 or len(clients_list) > 32:
+        abort('Number of clients must be between 4 and 32')
+
+    for client in clients_list:
+        fields = client.split(':')
+        client_name = fields[0]
+        client_port = '27960' 
+        if len(fields) > 1:
+            client_port = fields[1]
+
+        # start s2c traffic
+        execute(_start_s2c_game,
+                counter=str(counter),
+                file_prefix=file_prefix,
+                remote_dir=remote_dir,
+                local_dir=local_dir,
+                game_type=game_type,
+                client_num=str(len(clients_list)),
+                port=client_port,
+                src_port=server_port,
+                #src_port=client_port,
+                client=client_name,
+                pkt_interval=s2c_interval,
+                duration=duration,
+                extra_params=extra_params_server,
+                check=check,
+                # randomise the start times a bit
+                wait=str(float(wait) + random.random()/25),
+                hosts=[server_name])
+                     
+        counter += 1
+
+    for client in clients_list:
+        fields = client.split(':')
+        client_name = fields[0]
+        client_port = '27960'
+        if len(fields) > 1:
+            client_port = fields[1]
+
+        # start c2s traffic
+        execute(_start_c2s_game,
+                counter=str(counter),
+                file_prefix=file_prefix,
+                remote_dir=remote_dir,
+                local_dir=local_dir,
+                game_type=game_type,
+                client_num=str(len(clients_list)),
+                port=server_port,
+                #port=client_port,
+                src_port=client_port,
+                server=server_name,
+                pkt_interval=c2s_interval,
+                psize=c2s_psize,
+                duration=duration,
+                extra_params=extra_params_client,
+                check=check,
+                # delay client start to make sure server is started first
+                # (pktgen is a bit slow to start). if we see failed connections
+                # increase this number!
+                wait=str(float(wait) + float(client_start_delay)),
+                hosts=[client_name])
+
+        counter += 1
 

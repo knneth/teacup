@@ -24,9 +24,9 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
-# Plot throughput RTT, CWN, TCP parameter over time 
+# Plot burst graphs 
 #
-# $Id: plot_time_series.R 1318 2015-05-06 08:16:54Z szander $
+# $Id: plot_bursts.R 1267 2015-04-22 03:12:27Z szander $
 
 # Evironment parameters that control the script (alphabetical order):
 # AGGR:   '0' means plot data as is, i.e. values over time
@@ -38,9 +38,6 @@
 # AGGR_INT_FACTOR: factor for oversampling / overlapping windows (default is 4
 #                  meaning we get 4 times the number of samples compared to non-
 #                  overlapping windows) 
-# BOXPL:  '0' plot each point on time axis (x-axis)
-#         '1' plot a boxplot over all data points from all data seres for each 
-#         distinct timestamp (instead of a point for each a data series) 
 # ETIME:  end time on x-axis (for zooming in), default is 0.0 meaning the end of an
 #         experiment a determined from the data
 # FNAMES: comma-separated list of file names (each file contains one date series,
@@ -83,9 +80,6 @@
 # YINDEX: index of data column in file to plot on y-axis (since file can have more 
 #         than one data column)
 # YSCALER: factor which is multiplied with each data value before plotting
-# FILTER_FLOWS: if set to '1', filter flows out that is not in the time window specified by
-#         stime and etime; if set to '0' don't filter out any flows
-
 
 # our current dir
 argv = commandArgs(trailingOnly = F)
@@ -121,8 +115,6 @@ if (tmp != "") {
 aggr = Sys.getenv("AGGR")
 # change to non-cummulative
 diff = Sys.getenv("DIFF")
-# boxplot per time point
-boxpl = Sys.getenv("BOXPL")
 # omit any series with constant value
 omit_const = Sys.getenv("OMIT_CONST")
 if (omit_const == "" || omit_const == "0") {
@@ -142,12 +134,6 @@ aggr_int_factor = 4
 if (tmp != "") {
         aggr_int_factor = as.numeric(tmp)
 }
-tmp = Sys.getenv("FILTER_FLOWS")
-if (tmp == "" || tmp == "0") {
-        do_filter = FALSE
-} else {
-        do_filter = TRUE
-}
 
 # source basic plot stuff
 source(paste(base_dir, "plot_func.R", sep="/"), verbose=F)
@@ -155,33 +141,8 @@ source(paste(base_dir, "plot_func.R", sep="/"), verbose=F)
 # source point thinning
 source(paste(base_dir, "point_thinning.R", sep="/"), verbose=F)
 
-# function to compute the percentage
-percentage <- function(x)
-{
-	return ( as.numeric(sum(x)) / as.numeric(length(x)) * 100.0 )
-}
 
 # main
-
-# memorize the user values for stime and etime
-user_stime = stime
-user_etime = etime
-
-# we can only plot 12 series in one graph, if we have more than 12 create 
-# multiple graphs
-series_cnt = ceiling(length(fnames) / 12)
-
-for (series_no in c(1:series_cnt)) {
-
-start = (series_no - 1) * max_series + 1
-if (series_no < series_cnt) {
-        end = series_no * max_series
-} else {
-        end = length(fnames)
-}
-
-curr_fnames = fnames[start:end]
-curr_lnames = lnames[start:end]
 
 no_groups = length(levels(factor(groups)))
 
@@ -191,14 +152,14 @@ xmin = rep(1e99, no_groups)
 xmax = rep(0, no_groups)
 ymin = 1e99
 ymax = 0  
-for (fname in curr_fnames) {
+for (fname in fnames) {
 	data[[i]] = read.table(fname, header=F, sep=sep, na.strings="foobla")
 
         data[[i]] = data[[i]][,c(1,yindex)]
 
 	if (omit_const) {
 		if (sd(data[[i]][,2]) == 0) {
-			curr_lnames = curr_lnames[-i]
+			lnames = lnames[-i]
 			next	
 		}
 	}		
@@ -230,12 +191,55 @@ for (fname in curr_fnames) {
 }
 
 
-# normalise time to start with zero
+# normalise time to start with zero for each experiment
 for (i in c(1:length(data))) {
         data[[i]][,1] = data[[i]][,1] - xmin[groups[i]]
 }
 for (i in c(1:no_groups)) {
 	xmax[i] = xmax[i] - xmin[i]
+}
+
+# assumption: we have the same number of burst files per flow/group
+# now we need to normalise the start times of each burst of each flow 
+# based on the start time of the first flow in each burst
+
+# get number of bursts
+# look for the highest number at the end of the file names
+# and that is the number of bursts
+no_bursts = 0
+for (fname in fnames) {
+	x = strsplit(fname, split=".", fixed=T)[[1]]
+        x = as.numeric(x[length(x)])
+	if (x > no_bursts) {
+		no_bursts = x
+	}
+}
+
+# number of flows must be number of datasets divided by number
+# of bursts
+no_flows = length(data) / no_bursts
+
+# normalise the burst starts
+for (i in c(1:no_bursts)) {
+        burst_xmin = 1e99
+        for (j in c(1:no_flows)) {
+                idx = (j - 1) * no_bursts + i
+                if (min(data[[idx]][,1]) < burst_xmin) {
+                        burst_xmin = min(data[[idx]][,1])
+                }
+        }
+        for (j in c(1:no_flows)) {
+                idx = (j - 1) * no_bursts + i
+                data[[idx]][,1] = data[[idx]][,1] - burst_xmin
+        }
+}
+
+# adjust xmax accordingly
+xmax = rep(0, no_groups)
+for (i in c(1:length(data))) {
+        if (max(data[[i]][,1]) > xmax[groups[i]]) {
+                xmax[groups[i]] = max(data[[i]][,1])
+        }
 }
 
 if (diff == "1") {
@@ -246,7 +250,7 @@ if (diff == "1") {
         }
 }
 
-if (aggr != "" && aggr != "0") {
+if (aggr != "") {
 	ymin = 1e99
 	ymax = 0
 	xmax = rep(0, no_groups)
@@ -261,27 +265,13 @@ if (aggr != "" && aggr != "0") {
 		for (x in iseq) {
 			tmp = data[[i]]
 			tmp[,1] = floor((tmp[,1] - x)*(1/window_size))
-                        if (aggr == "1") {
-                        	# throughput
-				myfun=sum
-			} else if (aggr == "2") {
-                        	# packet loss
-				myfun=percentage
-			}
-
 			data_out = rbind(data_out, cbind(
                                        data.frame(as.numeric(levels(factor(tmp[,1])))/(1/window_size) + 
                                                   x + (1/interpolate_steps)/2 + window_size/2), 
-                                       data.frame(tapply(tmp[,-1], tmp[,1], FUN=myfun))))
+                                       data.frame(tapply(tmp[,-1], tmp[,1], FUN=sum))))
 		}
 		data[[i]] = data_out[order(data_out[,1]),]
-                if (aggr == "1") {
-			# throughput
-			data[[i]][,2] = data[[i]][,2] * (1/window_size)
-                } else if (aggr == "2") {
-			# packet loss
-			data[[i]][,2] = data[[i]][,2]
-		}
+		data[[i]][,2] = data[[i]][,2] * (1/window_size)
 		#print(data[[i]])
 
 		# point thinning
@@ -300,8 +290,6 @@ if (aggr != "" && aggr != "0") {
 }
 
 # plot only specific time window
-stime = user_stime
-etime = user_etime
 if (stime < 0 || stime > max(xmax)) {
         stime = 0.0
 }
@@ -320,25 +308,6 @@ if (stime > 0.0 || etime < max(xmax)) {
 	}
 }
 
-# delete any flows for which there is no data in user selected time window
-if (do_filter) {
-        # identify which flows were not active within stime and etime
-        # and collect their indexes in delete
-        delete = vector()
-	for (i in c(1:length(data))) {
-		tmp = data[[i]][data[[i]][,1]>=stime & data[[i]][,1]<=etime,]
-		if (length(tmp[,1]) == 0) {
-                	delete = append(delete, i)
-		}
-	}	
-        # delete inactive flows from back to front (if we would delete front to back indexes
-        # would change after each delete)
-	for (i in delete[order(delete, decreasing=TRUE)]) {
-		data[[i]] <- NULL
-                curr_lnames <- curr_lnames[-i]
-	}
-}
-
 # if user specified maximum, then take user value
 if (ymax_user != 0) {
 	ymax = ymax_user
@@ -350,21 +319,35 @@ if (ymin_user != 0) {
         ymin = ymin_user
 }
 
+
+# we can only plot 12 series in one graph, if we have more than 12 create 
+# multiple graphs
+series_cnt = ceiling(length(fnames) / 12)
+
+for (series_no in c(1:series_cnt)) {
+
+start = (series_no - 1) * max_series + 1
+if (series_no < series_cnt) {
+        end = series_no * max_series
+} else {
+        end = length(fnames)
+}
+
+curr_data = list()
+c = 1
+for (i in c(start:end)){
+	curr_data[[c]] = data[[i]]
+	c = c + 1
+}
+curr_lnames = lnames[start:end]
+
 if (series_cnt > 1) {
 	# append series index to name
-	out_name = paste(oprefix,"_time_series_",series_no,sep="")
+	out_name = paste(oprefix,"_bursts_time_series_",series_no,sep="")
 } else {
-	out_name = paste(oprefix,"_time_series",sep="")
+	out_name = paste(oprefix,"_bursts_time_series",sep="")
 }
 print(out_name)
-
-
-if (boxpl == "1") {
-	# adjust width based on number of x-axis labels
-	print(paste('nogroups', no_groups))
-        width = width * no_groups 
-}
-
 
 create_file(out_name, otype)
 
@@ -372,81 +355,19 @@ par(mar=c(4.6, 5.1, 2.1, 4.6))
 par(las=1) # always vertical labels
 f = 1 + ceiling(length(data) / 2) * ymax_inc 
 
-if (boxpl == "" || boxpl == "0") {
-
-plot(data[[1]][,1], data[[1]][,2], type="p", pch=pchs[1], col=cols[1], bg=cols[1], 
+plot(curr_data[[1]][,1], curr_data[[1]][,2], type="p", pch=pchs[1], col=cols[1], bg=cols[1], 
      cex=cexs[1], xlab="Time (s)", ylab=ylab, xlim=c(stime, etime), ylim=c(ymin, ymax*f), 
      main = title, cex.main=0.5, axes=T)
 
 grid()
 
-for (i in c(1:length(data))) {
-	points(data[[i]][,1], data[[i]][,2], type="p", pch=pchs[i], col=cols[i], 
+for (i in c(1:length(curr_data))) {
+	points(curr_data[[i]][,1], curr_data[[i]][,2], type="p", pch=pchs[i], col=cols[i], 
                bg=cols[i], cex=cexs[i])
 }
 
 legend("topleft", ncol=2, inset=linset, legend=curr_lnames, pch=pchs, col=cols, pt.bg=cols,
        pt.cex=cexs, cex=0.52, border=NA, bty="o", bg="white", box.col="white")
-
-} else {
-
-# get a no_groups lists for each point in time where each list is a vector of all the
-# response times for all the responders for each group (experiment)
-pdata = list()
-for (i in c(1:length(data[[1]][,1]))) {
-        for (g in c(1:no_groups)) {
-		ind = no_groups * (i - 1) + g 
-        	pdata[[ind]] = vector() 
-           	for (j in c(1:length(data))) {
-                        if (as.numeric(groups[j]) == g) {
-	         		pdata[[ind]] = append(pdata[[ind]], data[[j]][i,2])
-			}
-	   	}
-	}
-}
-print(pdata)
-
-atvec  = vector()
-atcols = vector()
-
-g = length(pdata) / no_groups 
-for (i in c(1:g)) {
-        for (j in c(1:no_groups)) {
-		atvec = append(atvec, data[[1]][i,1] - no_groups + 2*j-1)
-	}
-}
-atcols = rep(cols[1:no_groups], g)
-
-if (length(lnames) != no_groups) {
-	lnames = vector()
-	for (i in c(1:no_groups)) {
-		lnames = append(lnames, paste("Experiment", i))
-	}
-}
-print(atvec)
-print(atcols)
-print(lnames)
-
-boxplot(pdata, col=atcols, bg=atcols, at=atvec, boxwex=1,
-     cex=cexs[1], xlab="Time (s)", ylab=ylab, xlim=c(stime, etime), ylim=c(ymin, ymax*f), 
-     main = title, cex.main=0.5, axes=F)
-
-axis(1)
-axis(2)
-
-grid()
-abline(v=data[[1]][,1], lty=3, col="lightgrey")
-
-boxplot(pdata, col=atcols, bg=atcols, at=atvec, boxwex=1, 
-     cex=cexs[1], xlab="Time (s)", ylab=ylab, xlim=c(stime, etime), ylim=c(ymin, ymax*f),
-     main = title, cex.main=0.5, axes=F, add=T)
-
-if (length(lnames) > 1) {
-	legend("topleft", ncol=2, inset=linset, legend=lnames, fill=cols,
-       		pt.cex=cexs, cex=0.52, border=NA, bty="o", bg="white", box.col="white")
-}
-
-}
 
 box()
 

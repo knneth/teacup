@@ -24,9 +24,10 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+## @package hostmac
 # Functions to determine the MACs of the control interface
 #
-# $Id: hostmac.py 958 2015-02-12 04:52:49Z szander $
+# $Id: hostmac.py 1302 2015-05-01 07:47:33Z szander $
 
 import re
 import socket
@@ -35,14 +36,13 @@ from fabric.api import task, warn, local, run, execute, abort, hosts, env
 from hosttype import get_type_cached
 
 
-# maps external IPs or host names to MAC addresses (automatically populated)
+## Map external IPs or host names to MAC addresses (automatically populated)
 host_external_mac = {}
 
 
-# Get network interface MAC
-# Parameters:
-#	host: host identifier used by Fabric
-# Returns: interface MAC string in lower case, e.g. "d4:85:64:bf:5c:90"
+## Get network interface MAC
+#  @param host Host name/identifier used by Fabric
+#  @return Interface MAC string in lower case, e.g. "d4:85:64:bf:5c:90"
 def get_netmac_cached(host=''):
     global host_external_mac
 
@@ -58,13 +58,12 @@ def get_netmac_cached(host=''):
     return res
 
 
-# Get MAC of host internal/external network interface
-# Parameters:
-#	internal_int: '0' get MAC for internal interface (non-router only),
-#                     '1' get MAC for external/control interface (non-router only)
-# Returns: interface MAC string in lower case, e.g. "d4:85:64:bf:5c:90"
-# Limitation: if env.host_string is localhost (e.g. VM connected via NAT)
-# we return the MAC of the first interface
+## Get MAC of host internal/external network interface (TASK)
+## Limitation: if env.host_string is localhost (e.g. VM connected via NAT)
+## we return the MAC of the first interface
+#  @param internal_int If '0' get MAC for internal interface (non-router only),
+#                     if '1' get MAC for external/control interface (non-router only)
+#  @return Interface MAC string in lower case, e.g. "d4:85:64:bf:5c:90"
 @task
 def get_netmac(internal_int='0'):
     "Get MAC address for external/ctrl network interface"
@@ -86,7 +85,7 @@ def get_netmac(internal_int='0'):
     if host_string == 'localhost':
         host_string = '127.0.0.1'
 
-    if host_string == config.TPCONF_router[0] or host_string == '127.0.0.1':
+    if host_string in config.TPCONF_router or host_string == '127.0.0.1':
         # get MAC of router
 
         htype = get_type_cached(env.host_string)
@@ -143,8 +142,9 @@ def get_netmac(internal_int='0'):
     return mac.lower()
 
 
-# Get MAC address of non-router by pinging host (and thereby populating the
-# ARP table) and reading the MAC from the ARP table
+## Get MAC address of non-router by pinging host (and thereby populating the
+## ARP table) and reading the MAC from the ARP table on the first router
+#  @param host Host to get MAC for
 @task
 def _get_netmac(host=''):
 
@@ -158,9 +158,9 @@ def _get_netmac(host=''):
 
         # get mac address
         if htype == 'FreeBSD':
-            mac = run("arp %s | cut -d' ' -f 4" % host)
+            mac = run("arp %s | cut -d' ' -f 4 | head -1" % host)
         elif htype == 'Linux':
-            mac = run("arp -a %s | cut -d' ' -f 4" % host)
+            mac = run("arp -a %s | cut -d' ' -f 4 | head -1" % host)
         else:
             abort("Can't determine MAC address for OS %s" % htype)
 

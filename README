@@ -1,12 +1,12 @@
 TEACUP (TCP Experiment Automation Controlled Using Python) README 
 =================================================================
 
-$Id: README 972 2015-02-12 23:53:05Z szander $
+$Id: README 1236 2015-04-14 07:51:18Z szander $
 
 ACKNOWLEDGMENTS
 ---------------
 
-TEACUP v0.8 was developed as part of a project funded by Cisco 
+TEACUP v0.9 was developed as part of a project funded by Cisco 
 Systems and titled "Study in TCP Congestion Control Performance In 
 A Data Centre". This is a collaborative effort between CAIA and 
 Fred Baker of Cisco Systems.
@@ -15,18 +15,22 @@ Fred Baker of Cisco Systems.
 INTRODUCTION
 ------------
 
-This README is for TEACUP Version 0.8.
+This README is for TEACUP Version 0.9.
 
 This README provides a brief overview on how to setup experiments.
 It ONLY discusses the most commonly used config options.
 
 For more details on how to setup experiments and the design of TEACUP
 please refer to the technical report: 
-http://caia.swin.edu.au/reports/150210A/CAIA-TR-150210A.pdf 
+http://caia.swin.edu.au/reports/150414A/CAIA-TR-150414A.pdf 
+
+For more details on how to analyse the data collected during experiments
+please refer to the technical report:
+http://caia.swin.edu.au/reports/150414B/CAIA-TR-150414B.pdf
 
 There also is a technical report that provides a command reference for
-all fab tasks TEACUP provides:
-http://caia.swin.edu.au/reports/150210B/CAIA-TR-150210B.pdf
+all tasks TEACUP provides:
+http://caia.swin.edu.au/reports/150414C/CAIA-TR-150414C.pdf
 
 
 TEACUP TESTBED
@@ -34,7 +38,7 @@ TEACUP TESTBED
 
 TEACUP makes some assumptions on the setup of the testbed and hosts. In order
 to use all of TEACUP's functions one needs to install a testbed as described
-brifefly in INSTALL and described in more detail in:
+briefly in INSTALL and described in more detail in:
 http://caia.swin.edu.au/reports/150210C/CAIA-TR-150210C.pdf 
 
 A minimum setup for TEACUP does not require all the functionality
@@ -83,7 +87,7 @@ authorisation is set up properly,
 All settings start with the TPCONF_ prefix and are Python variables (and 
 must adhere to the Python syntax).
 
-TPCONF_script_path = '/home/<user>/src/teacup-0.8'
+TPCONF_script_path = '/home/<user>/src/teacup-0.9'
 sys.path.append(TPCONF_script_path)
 
 The path were the TEACUP scripts are located. This is appended to the Python 
@@ -264,7 +268,7 @@ TEACUP supports the following traffic generators:
 - VoIP-like (fixed packet sizes and interval) (nttcp)
 
 Available traffic generators and their parameters are described in:
-http://caia.swin.edu.au/reports/150210A/CAIA-TR-150210A.pdf
+http://caia.swin.edu.au/reports/150414A/CAIA-TR-150414A.pdf
 
 6. Experiment variables
 
@@ -355,7 +359,7 @@ the variables are set to fixed values based on TPCONF_variable_defaults.
 TPCONF_parameter_list specifies the variable parameters.
 
 TPCONF_variable_defaults and TPCONF_parameter_list are explained in detail in:
-http://caia.swin.edu.au/reports/150210A/CAIA-TR-150210A.pdf
+http://caia.swin.edu.au/reports/150414A/CAIA-TR-150414A.pdf
 
 7. Example with two variables
 
@@ -444,7 +448,7 @@ ANALYSIS OF EXPERIMENT DATA
 ---------------------------
 
 TEACUP has a number of tasks for the analysis of experiment results. These are described 
-in: http://caia.swin.edu.au/reports/150210A/CAIA-TR-150210A.pdf
+in: http://caia.swin.edu.au/reports/150414B/CAIA-TR-150414B.pdf
 
 Currently analysis functions exist for:
 - Plotting throughput including all header bytes (from tcpdump data)
@@ -489,8 +493,8 @@ lnames="CDG;Newreno"
 
 More examples and a detailed description of the analysis tasks and their parameters 
 is in:
-http://caia.swin.edu.au/reports/150210A/CAIA-TR-150210A.pdf
-http://caia.swin.edu.au/reports/150210B/CAIA-TR-150210B.pdf
+http://caia.swin.edu.au/reports/150414B/CAIA-TR-150414B.pdf
+http://caia.swin.edu.au/reports/150414C/CAIA-TR-150414C.pdf
 
 
 UTILITY FUNCTIONS

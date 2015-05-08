@@ -26,7 +26,7 @@
 #
 # Plot DASH-like client goodput over time 
 #
-# $Id: plot_dash_goodput.R 958 2015-02-12 04:52:49Z szander $
+# $Id: plot_dash_goodput.R 1280 2015-04-28 01:20:24Z szander $
 
 # Evironment parameters that control the script (alphabetical order):
 # ETIME:  end time on x-axis (for zooming in), default is 0.0 meaning the end of an
@@ -185,12 +185,12 @@ par(mar=c(4.6, 5.1, 2.1, 4.6))
 par(las=1) # always vertical labels
 f = 1 + ceiling(length(data)/2) * ymax_inc 
 if (no_nominal == FALSE) {
-	plot(data[[nominal_idx]][,5], data[[nominal_idx]][,6], type="b", pch=pchs[1], 
+	plot(data[[nominal_idx]][,5], data[[nominal_idx]][,6], type="p", pch=pchs[1], 
              col=cols[1], bg=cols[1], cex=cexs[1], xlab="Time (s)", ylab=ylab, 
              xlim=c(stime, etime), ylim=c(ymin, ymax*f), main = title, cex.main=0.5, 
              axes=T)
 } else {
-	plot(data[[1]][,1], data[[1]][,2], type="b", pch=pchs[1], col=cols[1], 
+	plot(data[[1]][,1], data[[1]][,2], type="p", pch=pchs[1], col=cols[1], 
              bg=cols[1], cex=cexs[1], xlab="Time (s)", ylab=ylab, xlim=c(stime, etime), 
              ylim=c(ymin, ymax*f), main = title, cex.main=0.5, axes=T)
 }
@@ -198,7 +198,7 @@ if (no_nominal == FALSE) {
 grid()
 
 if (no_nominal == FALSE) {
-	points(data[[nominal_idx]][,5], data[[nominal_idx]][,6], type="b", pch=pchs[1], 
+	points(data[[nominal_idx]][,5], data[[nominal_idx]][,6], type="p", pch=pchs[1], 
                col=cols[1], bg=cols[1], cex=cexs[1])
 }
 
@@ -208,7 +208,7 @@ for (i in c(1:length(data))) {
 	} else {
 		idx = i
 	}
-	points(data[[i]][,1], data[[i]][,2], type="b", pch=pchs[idx], col=cols[idx], 
+	points(data[[i]][,1], data[[i]][,2], type="p", pch=pchs[idx], col=cols[idx], 
                bg=cols[idx], cex=cexs[idx])
 }
 

@@ -24,9 +24,10 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+## @package sanitychecks
 # Sanity checks
 #
-# $Id: sanitychecks.py 1000 2015-02-17 06:38:35Z szander $
+# $Id: sanitychecks.py 1313 2015-05-05 05:58:01Z szander $
 
 import sys
 import os
@@ -39,11 +40,12 @@ from hosttype import get_type_cached
 from hostint import get_netint_cached, get_netint_windump_cached
 from hostmac import get_netmac_cached
 
-from trafficgens import start_iperf, stop_iperf, start_ping, stop_ping, \
-    start_http_server, stop_http_server, start_httperf, stop_httperf, \
-    start_httperf_dash, stop_httperf_dash, create_http_dash_content, \
+from trafficgens import start_iperf, start_ping, \
+    start_http_server, start_httperf, \
+    start_httperf_dash, create_http_dash_content, \
     create_http_incast_content, start_httperf_incast, \
-    stop_httperf_incast, start_nttcp, start_httperf_incast_n
+    start_nttcp, start_httperf_incast_n, \
+    start_fps_game
 
 
 def _args(*_nargs, **_kwargs):
@@ -59,8 +61,31 @@ def _reg_vname(name, vnames, entry):
     return 0
 
 
-# Check config file settings
-# Parameters:
+## Check router queues
+#  @param queue_spec Queue specification from config
+#  @param vnames_referenced Dictionary of variables names to add to
+def check_router_queues(queue_spec, vnames_referenced):
+    ids = {}
+    entry = 1
+    for c, v in queue_spec:
+        # insert all variable names used in vnames referenced
+        v = re.sub(
+            "(V_[a-zA-Z0-9_-]*)",
+            "_reg_vname('\\1', vnames_referenced, 'TPCONF_router_queues entry %s')" %
+            entry,
+            v)
+        eval('_args(%s)' % v)
+
+        if c in ids:
+            abort(
+                'TPCONF_router_queues entry %s: reused id value %i' %
+                (entry, c))
+
+        ids[c] = 1
+        entry += 1
+
+
+## Check config file settings (TASK)
 @task
 def check_config():
     "Check config file"
@@ -159,6 +184,8 @@ def check_config():
             abort('Internal IP(s) are not a list for host %s' % h)
         if len(config.TPCONF_host_internal_ip[h]) < 1:
             abort('Must specify at least one internal IP for host %s' % h)
+        if h in config.TPCONF_router and len(config.TPCONF_host_internal_ip[h]) < 2:
+            abort('Must specify two internal IPs for router %s' % h)
 
     # if host operating system spec exist check that we have one entry
     # for each host and that OS names are correct
@@ -201,24 +228,15 @@ def check_config():
 
     vnames_referenced = {}
 
-    ids = {}
-    entry = 1
-    for c, v in config.TPCONF_router_queues:
-        # insert all variable names used in vnames referenced
-        v = re.sub(
-            "(V_[a-zA-Z0-9_-]*)",
-            "_reg_vname('\\1', vnames_referenced, 'TPCONF_router_queues entry %s')" %
-            entry,
-            v)
-        eval('_args(%s)' % v)
-
-        if c in ids:
-            abort(
-                'TPCONF_router_queues entry %s: reused id value %i' %
-                (entry, c))
-
-        ids[c] = 1
-        entry += 1
+    if isinstance(config.TPCONF_router_queues, list):
+        check_router_queues(config.TPCONF_router_queues, vnames_referenced)
+    elif isinstance(config.TPCONF_router_queues, dict):
+        for router in config.TPCONF_router_queues.keys():
+            if router not in config.TPCONF_router:
+                abort('Router %s specified in TPCONF_router_queues, but ' 
+                      'not listed in TPCONF_router' % router)
+            check_router_queues(config.TPCONF_router_queues[router],
+                                vnames_referenced)
 
     if len(config.TPCONF_traffic_gens) == 0:
         abort('TPCONF_traffic_gens must define at least one traffic generator')
@@ -334,8 +352,7 @@ def check_config():
     puts('Config file looks OK')
 
 
-# Check hosts for necessary tools (run in parallel on each host)
-# Parameters:
+## Check hosts for necessary tools (TASK)
 @task
 @parallel
 def check_host():
@@ -408,9 +425,12 @@ def check_host():
     run('chmod a+x /usr/bin/kill_iperf.sh', pty=False)
     run('which kill_iperf.sh', pty=False)
 
+    put(config.TPCONF_script_path + '/pktgen.sh', '/usr/bin')
+    run('chmod a+x /usr/bin/pktgen.sh', pty=False)
+    run('which pktgen.sh', pty=False)
 
-# Check connectivity and also prime switch CAM table (run in parallel on each host)
-# Parameters:
+
+## Check connectivity (and also prime switch's CAM table) (TASK)
 @task
 @parallel
 def check_connectivity():
@@ -428,11 +448,9 @@ def check_connectivity():
                 run('ping -c 2 %s' % ihost, pty=False)
 
 
-# Check time synchronisation with control machine (must not run in parallel!)
-# This is only a simple check to detect if clocks are completely out of sync
-# Assumes:
-# - the control machine is synchronised (i.e. uses NTP)
-# Parameters:
+## Check time synchronisation with control machine (should not run in parallel)
+## This is only a simple check to detect if clocks are completely out of sync
+## Assumes: the control machine is synchronised (i.e. uses NTP)
 @task
 def check_time_sync():
     "Check time synchronisation between control host and testbed host clocks"
@@ -447,6 +465,8 @@ def check_time_sync():
     htype = get_type_cached(env.host_string)
 
     # get timestamps in unix time to avoid having to do time format conversions
+    # XXX should get timestamps in milliseconds, cause now we have huge quantisation
+    # error, but how to do this in a portable way?
 
     t1 = datetime.datetime.now()
     if htype == 'FreeBSD' or htype == 'Linux' or htype == 'Darwin':
@@ -472,8 +492,7 @@ def check_time_sync():
             (env.host_string, str(allowed_time_diff)))
 
 
-# Kill any old processes (run on parallel on each host)
-# Parameters:
+## Kill any old processes (TASK)
 @task
 @parallel
 def kill_old_processes():
@@ -509,21 +528,19 @@ def kill_old_processes():
         run('rm -f /var/run/*lighttpd.pid', pty=False)
         run('killall runbg_wrapper.sh', pty=False)
         run('killall nttcp')
+        run('killall pktgen.sh ; killall python')
 
     # remove old log stuff in /tmp
     run('rm -f /tmp/*.log', pty=False)
 
 
-# Collect host info, prefill caches
-# this must not be run in parallel!!!
-# any parallel task cannot fill the caches cause the parallel execution
-# is done with fork()
-# Parameters:
-#	htype: '0' don't get host OS, '1' get host OS
-#	netint: '0' don't get network interface names,
-#               '1' get network interface names
-#	netmac: '0' don't get MAC addresses, '1' get MAC addresses
-#@task
+## Collect host info, prefill caches (must not be run in parallel!!!)
+## any parallel task cannot fill the caches cause the parallel execution
+## is done with fork()
+#  @param htype  '0' don't get host OS, '1' get host OS
+#  @param netint '0' don't get network interface names,
+#                '1' get network interface names
+#  @param netmac '0' don't get MAC addresses, '1' get MAC addresses
 @serial
 def get_host_info(htype='1', netint='1', netmac='1'):
     "Populate the host info caches"
@@ -540,8 +557,7 @@ def get_host_info(htype='1', netint='1', netmac='1'):
         get_netmac_cached(env.host_string)
 
 
-# Run all sanity checks
-# Parameters:
+## Run all sanity checks
 @task
 def sanity_checks():
     "Perform all sanity checks, e.g. check for needed tools and connectivity"

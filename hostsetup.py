@@ -24,9 +24,10 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
-# Host setup
+## @package hostsetup
+# Host setup fucntions
 #
-# $Id: hostsetup.py 1004 2015-02-18 01:35:37Z szander $
+# $Id: hostsetup.py 1301 2015-05-01 01:38:36Z szander $
 
 import sys
 import time
@@ -40,23 +41,74 @@ import pexpect # must use version 3.2, version 3.3 does not work
 import pxssh
 import config
 from fabric.api import reboot, task, warn, local, puts, run, execute, abort, \
-    hosts, env, settings, parallel, put, runs_once
+    hosts, env, settings, parallel, put, runs_once, hide
+from fabric.exceptions import NetworkError
 from hosttype import get_type_cached, get_type
 from hostint import get_netint_cached
 from hostmac import get_netmac_cached
 
 
-# Setup VLANs on switch 
-# Parameters:
-#       switch: switch name
-#       port_prefix: prefix for ports at switch
-#       port_offset: host number to port number offset
+## Get interface speed for host, if defined
+#  @param host Host name
+#  @return Empty string (if no link speed defined), '10', '100', '1000', 'auto'
+def get_link_speed(host):
+    speed = 'auto'
+    allowed_speeds = [ '10', '100', '1000', 'auto' ]
+
+    try:
+        speed = config.TPCONF_linkspeed
+    except AttributeError:
+        pass
+
+    try:
+        speed = config.TPCONF_host_linkspeed[host]
+        if speed not in allowed_speeds:
+            abort('Invalid speed for host %s in TPCONF_host_internal_speed' 
+                  '(must be 10, 100, 1000 or auto)' %
+                  env.host_string)
+    except (AttributeError, KeyError) as e:
+        pass
+
+    return speed
+    
+
+## Setup VLANs on switch (TASK)
+#  @param switch Switch DNS name
+#  @param port_prefix Prefix for ports at switch
+#  @param port_offset Host number to port number offset
 @task
 # XXX parallel crashes when configuring switch. maybe just session limit on switch
 # but to avoid overwhelming switch, run sequentially
 #@parallel
-def init_topology_switch(switch='switch2', port_prefix='Gi1/0/', port_offset = '5'):
+def init_topology_switch(switch='', port_prefix='', port_offset = ''):
     "Topology setup switch"
+
+    if switch == '':
+        try:
+            switch = config.TPCONF_topology_switch
+        except AttributeError:
+            pass
+
+    if switch == '':
+        abort('Switch name must be defined on command line or in config.py')
+
+    if port_prefix == '':
+        try:
+            port_prefix = config.TPCONF_topology_switch_port_prefix
+        except AttributeError:
+            pass
+
+    if port_prefix == '':
+        abort('Port prefix must be defined on command line or in config.py')
+
+    if port_offset == '':
+        try:
+            port_offset = config.TPCONF_topology_switch_port_offset
+        except AttributeError:
+            pass
+
+    if port_offset == '':
+        abort('Port offset must be defined on command line or in config.py')
 
     if env.host_string not in config.TPCONF_hosts:
         abort('Host %s not found in TPCONF_hosts' % env.host_string)
@@ -68,8 +120,11 @@ def init_topology_switch(switch='switch2', port_prefix='Gi1/0/', port_offset = '
         abort('No entry for host %s in TPCONF_host_internal_ip' %
               env.host_string)
 
+    # get interface speed setting if defined
+    link_speed = get_link_speed(env.host_string) 
+
     #
-    # first switch VLANs on switch
+    # login to switch and change VLAN
     #
 
     host_string = env.host_string
@@ -89,27 +144,56 @@ def init_topology_switch(switch='switch2', port_prefix='Gi1/0/', port_offset = '
     s.logfile_read = sys.stdout
     s.logfile_send = sys.stdout
     ssh_newkey = 'Are you sure you want to continue connecting'
-    i = s.expect([ssh_newkey, 'password:', pexpect.EOF, pexpect.TIMEOUT], timeout = 5)
-    if i==0:
+    # look for "assword" here, since depending on switch version password starts with capital p
+    # or non-capital p
+    i = s.expect([ssh_newkey, 'User Name:', 'assword:', pexpect.EOF, pexpect.TIMEOUT], timeout = 5)
+    if i == 0:
         s.sendline('yes')
-        i = s.expect([ssh_newkey, 'password:', pexpect.EOF])
-    if i==1:
+        i = s.expect([ssh_newkey, 'User Name:', 'assword:', pexpect.EOF])
+    if i == 1:
+        s.sendline(env.user)
+        i = s.expect([ssh_newkey, 'User Name:', 'assword:', pexpect.EOF])
+    if i == 2:
         s.sendline(env.password)
-    elif i==2:
+    elif i == 3:
         # have key"
         pass
-    elif i==3: 
+    elif i == 4: 
         # connection timeout
         abort('Timeout while waiting for password prompt') 
 
-    s.expect('>')
-    s.sendline('enable')
+    i = s.expect(['>', '#'])
+    if i == 0:
+        s.sendline('enable')
+        s.expect('#')
+
+    # figure out if we have the auto setting for speed. assume we have auto
+    # but if version too old then we don't have it
+    speed_no_auto = False
+    s.sendline('show version')
     s.expect('#')
+
+    # if old version than we don't have the auto setting for speed
+    if s.before.find('2.0.1.4') > -1:
+        speed_no_auto = True
+
     s.sendline('config')
     s.expect('#')
     s.sendline('int %s%i' % (port_prefix, port_number))
     s.expect('#')
     s.sendline('switchport access vlan %s' % vlan)
+    s.expect('#')
+    if speed_no_auto:
+        if link_speed == 'auto':
+            s.sendline('speed 1000')
+        else:
+            s.sendline('speed %s' % link_speed)
+    else:
+        if link_speed == '10' or link_speed == 'auto':
+            s.sendline('speed %s' % link_speed)
+        else:
+            s.sendline('speed auto %s' % link_speed)
+    # duplex seems to be always full (duplex command does not exist anymore)
     s.expect('#')
     s.sendline('exit')
     s.expect('#')
@@ -123,8 +207,8 @@ def init_topology_switch(switch='switch2', port_prefix='Gi1/0/', port_offset = '
     env.host_string = host_string
 
 
-# Setup NIC & routing on hosts 
-# Parameters:
+## Setup NIC and routing on hosts
+# XXX does not work with multiple routers
 @task
 @parallel
 def init_topology_host():
@@ -139,6 +223,9 @@ def init_topology_host():
     except AttributeError:
         abort('No entry for host %s in TPCONF_host_internal_ip' %
              env.host_string)
+
+    # get interface speed setting if defined
+    link_speed = get_link_speed(env.host_string)
 
     #
     # set network interface
@@ -160,9 +247,20 @@ def init_topology_host():
     htype = get_type_cached(env.host_string)
 
     if htype == 'Linux':
+
+        # set link speed via ethtool options
+        ethtool_options = ''
+        if link_speed == 'auto':
+            ethtool_options = 'autoneg on duplex full'
+        else:
+            if link_speed == '10':
+                ethtool_options = 'autoneg off speed %s duplex full' % link_speed
+            else:
+                ethtool_options = 'autoneg on speed %s duplex full' % link_speed
+
         test_if_config = "BOOTPROTO='static'\n" + \
                          "BROADCAST=''\n" + \
-                         "ETHTOOL_OPTIONS=''\n" + \
+                         "ETHTOOL_OPTIONS='" + ethtool_options + "'\n" + \
                          "IPADDR='" + test_ip + "/24'\n" + \
                          "MTU=''\n" + \
                          "NAME='Test IF'\n" + \
@@ -175,15 +273,16 @@ def init_topology_host():
         with open(fname, 'w') as f:
              f.write(test_if_config)
 
-        put(fname, '/etc/sysconfig/network/ifcfg-eth1')
+        #interface = 'enp2s0'
+        interface = 'eth1'
+
+        put(fname, '/etc/sysconfig/network/ifcfg-%s' % interface)
         os.remove(fname)
 
         if test_subnet == subnet1:
-            route = subnet2 + '.0 ' + subnet1 + '.1 255.255.255.0 eth1'
-            #route = subnet2 + '.0 ' + subnet1 + '.1 255.255.255.0 enp2s0'
+            route = subnet2 + '.0 ' + subnet1 + '.1 255.255.255.0 ' + interface
         else:
-            route = subnet1 + '.0 ' + subnet2 + '.1 255.255.255.0 eth1'
-            #route = subnet1 + '.0 ' + subnet2 + '.1 255.255.255.0 enp2s0'
+            route = subnet1 + '.0 ' + subnet2 + '.1 255.255.255.0 ' + interface
 
         run('echo %s > /etc/sysconfig/network/routes' % route)
 
@@ -191,16 +290,31 @@ def init_topology_host():
         run('systemctl restart network.service')
 
     elif htype == 'FreeBSD':
+        interface = 'em1'
+
         run('cp -a /etc/rc.conf /etc/rc.conf.bak')
         run('cat /etc/rc.conf | egrep -v ^static_routes | ' \
-            'egrep -v route_ | egrep -v ^ifconfig_em1 > __tmp')
+            'egrep -v route_ | egrep -v ^ifconfig_%s > __tmp' % interface)
         run('mv __tmp /etc/rc.conf')
+
+        media_settings = ''
+        if link_speed == '10':
+            media_settings = ' media 10baseT mediaopt full-duplex' 
+        else:
+            # setting mediaopt to full-duplex causes the link establishment to fail (with switch set to
+            # auto-neg). despite the fact that it is listed in 'man em', it did not work on FreeBSD 10.1.
+            # also we need to set type to auto, if switch uses auto-net, otherwise we get no carrier. also
+            # if we just run ifconfig with media <type>, it seems we can reliable kill the interface (no carrier).
+            # however, with netif restart it works.
+            #media_settings = ' media auto mediaopt full-duplex'
+            media_settings = ' media auto'
 
         # the most insane quoting ever :). Since fabric will quote command in double quotes and root has
         # csh we cannot echo a double quote with /". We must terminate Fabrics double quotes and put the
         # echo string in single quotes. We must use raw strings to be able to pass \" to shell. We must
         # also tell Fabric to not escape doubel quotes with \.
-        run('echo "\'%s\' >> /etc/rc.conf"' % (r'ifconfig_em1=\"' + test_ip + r' netmask 255.255.255.0\"'),
+        run('echo "\'%s\' >> /etc/rc.conf"' % 
+            (r'ifconfig_' + interface + r'=\"' + test_ip + r' netmask 255.255.255.0' + media_settings + r'\"'),
             shell_escape=False)
 
         if test_subnet == subnet1 :
@@ -215,6 +329,9 @@ def init_topology_host():
 
         # restart network
         run('/etc/rc.d/netif restart')
+
+        time.sleep(1)
+  
         with settings(warn_only=True):
             run('/etc/rc.d/routing restart')
 
@@ -255,6 +372,15 @@ def init_topology_host():
 
         run(route, pty=False)
 
+        #  there seems to be no command line tools on Windows that can set link speed, cause link speed setting
+        # is implemented in nic driver and can be configured via driver GUI. possible command line solution is
+        # to manipulate the registry value that store the link speed value for the testbed nic. however, the 
+        # implementation would be specific to the supported nic, as the registry entries are nic specific.
+        # by default autonegotiation is enabled though, so the switch will force the host to 100, 100,
+
+        # show interface speeds
+        run('wmic NIC where NetEnabled=true get Name, Speed')
+
     elif htype == 'Darwin':
         # remove all testbed routes
         run('route -n delete %s.0/24' % subnet1)
@@ -280,23 +406,31 @@ def init_topology_host():
             
         run('/Library/StartupItems/AddRoutes/AddRoutes start')
 
+        # XXX for Mac the link speed setting is not permanent for now. need to add new script under StartupItems
+        # to make this permanent (plus accompanying .plist file), similar to the AddRoutes approach
+        if link_speed == '10':
+            run('ifconfig %s media 10baseT/UTP mediaopt full-duplex' % interface)
+        elif link_speed == '100':
+            run('ifconfig %s media 100baseTX mediaopt full-duplex' % interface)
+        else:
+            run('ifconfig %s media 1000baseT mediaopt full-duplex' % interface)
 
-# Setup testbed network topology
-# XXX router is currently static and cannot be changed
-# This tasks makes a number of assumptions:
-# - hosts are numbered and numbers relate to the switch port 
-#   (starting from first port)
-# - VLAN number is the same as 3rd octet of IP
-# - there are two test subnets 172.16.10.0/24, 172.16.11.0/24
-# - interface names are known/hardcoded
-# Parameters:
-#       switch: switch name
-#       port_prefix: prefix for ports at switch
-#       port_offset: host number to port number offset
+
+## Setup testbed network topology (TASK)
+## This tasks makes a number of assumptions:
+## - One router dumbbell toplogy
+## - hosts are numbered and numbers relate to the switch port 
+##   (starting from first port)
+## - VLAN number is the same as 3rd octet of IP
+## - there are two test subnets 172.16.10.0/24, 172.16.11.0/24
+## - interface names are known/hardcoded
+#  @param switch Switch DNS name
+#  @param port_prefix Prefix for ports at switch
+#  @param port_offset Host number to port number offset
 @task
 # we need to invoke this task with runs_once, as otherwise this task will run once for each host listed in -H
 @runs_once
-def init_topology(switch='switch2', port_prefix='Gi1/0/', port_offset = '5'):
+def init_topology(switch='', port_prefix='', port_offset = ''):
     "Topology setup"
 
     # sequentially configure switch
@@ -305,8 +439,7 @@ def init_topology(switch='switch2', port_prefix='Gi1/0/', port_offset = '5'):
     execute(init_topology_host)
 
 
-# Power cycle hosts via the 9258HP power controllers
-# Parameters:
+## Power cycle hosts via the 9258HP power controllers
 @task
 @parallel
 def power_cycle():
@@ -388,26 +521,28 @@ def power_cycle():
         abort('Unsupported power controller \'%s\'' % ctrl_type)
 
 
-# Boot host into selected OS
-# Parameters:
-#	file_prefix: prefix for generated pxe boot file
-#	os_list: comma-separated string of OS (Linux, FreeBSD, CYGWIN), one for each host
-#	force_reboot: '0' (host will only be rebooted if OS should be changed,
-#                     '1' (host will always be rebooted)
-#	do_power_cycle: '0' (never power cycle host),
-#                       '1' (power cycle host if host does not come up after timeout
-#	boot_timeout: reboot timeout in seconds (integer)
-#	local_dir: directory to put the generated .ipxe files in
-#	linux_kern_router: Linux kernel to boot on router
-#	linux_kern_hosts: Linux kernel to boot on hosts
-#	tftp_server: of the form <server_ip>:<port> 
+## Boot host into selected OS (TASK)
+#  @param file_prefix Prefix for generated pxe boot file
+#  @param os_list Comma-separated string of OS (Linux, FreeBSD, CYGWIN), one for each host
+#  @param force_reboot If '0' (host will only be rebooted if OS should be changed,
+#                      if '1' (host will always be rebooted)
+#  @param do_power_cycle If '0' (never power cycle host),
+#                        if '1' (power cycle host if host does not come up after timeout
+#  @param boot_timeout Reboot timeout in seconds (integer)
+#  @param local_dir Directory to put the generated .ipxe files in
+#  @param linux_kern_router Linux kernel to boot on router
+#  @param linux_kern_hosts Linux kernel to boot on hosts
+#  @param tftp_server Specify the TFTP server in the form <server_ip>:<port> 
+#  @param mac_list Comma-separated list of MAC addresses for hosts (MACs of boot interfaces)
+#                  Only required if hosts are unresponsive/inaccessible.
 @task
 @parallel
 def init_os(file_prefix='', os_list='', force_reboot='0', do_power_cycle='0',
             boot_timeout='100', local_dir='.',
             linux_kern_router='3.10.18-vanilla-10000hz',
             linux_kern_hosts='3.9.8-desktop-web10g',
-            tftp_server='10.1.1.11:8080'):
+            tftp_server='10.1.1.11:8080',
+            mac_list=''):
     "Boot host with selected operating system"
 
     _boot_timeout = int(boot_timeout)
@@ -423,12 +558,27 @@ def init_os(file_prefix='', os_list='', force_reboot='0', do_power_cycle='0',
     while len(host_os_vals) < len(env.all_hosts):
         host_os_vals.append(host_os_vals[-1])        
 
-    # get type of current host
-    htype = get_type_cached(env.host_string)
+    host_mac = {} 
+    if mac_list != '': 
+        mac_vals = mac_list.split(',')
+        if len(env.all_hosts) != len(mac_vals):
+            abort('Must specify one MAC address for each host') 
+
+        # create a dictionary
+        host_mac = dict(zip(env.all_hosts, mac_vals))
+
+    # get type of current host if possible
+    # XXX try to suppress Fabric exception traceback in case host is not 
+    #     accessible, but doesn't seem to work properly
+    with settings(hide('debug', 'warnings'), warn_only=True):
+        htype = get_type_cached(env.host_string)
+
+    if type(htype) == NetworkError:
+        # host not accessible, set htype to unknown
+        htype = '?'
 
     # get dictionary from host and OS lists
     host_os = dict(zip(env.all_hosts, host_os_vals))
-
     # os we want
     target_os = host_os.get(env.host_string, '')
 
@@ -440,16 +590,29 @@ def init_os(file_prefix='', os_list='', force_reboot='0', do_power_cycle='0',
         else:
             target_kern = linux_kern_hosts
 
-        kern = run('uname -r')
+        if htype == 'Linux': 
+            kern = run('uname -r')
+        else:
+            kern = '?'
+
         if target_kern == 'running' or target_kern == 'current':
-            target_kern = kern
+            if htype == 'Linux':
+                target_kern = kern
+            else:
+                warn('Host not running Linux, ignoring "running" or "current"')
 
     if target_os != '' and (
             force_reboot == '1' or target_os != htype or target_kern != kern):
         # write pxe config file
         pxe_template = config.TPCONF_script_path + \
             '/conf-macaddr_xx\:xx\:xx\:xx\:xx\:xx.ipxe.in'
-        mac = get_netmac_cached(env.host_string)
+
+        # if we have a mac address specified use it, otherwise try to automatically
+        # get the mac address
+        if env.host_string in host_mac:
+            mac = host_mac[env.host_string]
+        else:
+            mac = get_netmac_cached(env.host_string)
         file_name = 'conf-macaddr_' + mac + '.ipxe'
 
 	hdd_partition = ''
@@ -514,7 +677,11 @@ def init_os(file_prefix='', os_list='', force_reboot='0', do_power_cycle='0',
 
         # reboot
         with settings(warn_only=True):
-            if htype == 'Linux' or htype == 'FreeBSD' or htype == 'Darwin':
+            if htype == '?':
+                # we cannot login to issue shutdown command, so power cycle and hope 
+                # for the best
+                execute(power_cycle)
+            elif htype == 'Linux' or htype == 'FreeBSD' or htype == 'Darwin':
                 run('shutdown -r now', pty=False)
             elif htype == 'CYGWIN':
                 run('shutdown -r -t 0', pty=False)
@@ -596,10 +763,9 @@ def init_os(file_prefix='', os_list='', force_reboot='0', do_power_cycle='0',
             (env.host_string, target_os, target_kern))
 
 
-# Boot host into right kernel/OS
-# Parameters:
-#       file_prefix: prefix for generated pxe boot file
-#       local_dir: directory to put the generated .ipxe files in
+## Boot host into right kernel/OS
+#  @param file_prefix Prefix for generated PXE boot file (test ID prefix)
+#  @param local_dir Directory to put the generated .ipxe files in
 def init_os_hosts(file_prefix='', local_dir='.'):
 
     # create hosts list
@@ -648,13 +814,10 @@ def init_os_hosts(file_prefix='', local_dir='.'):
             hosts=hosts_list)
 
 
-# Initialise host
-# Parameters:
-# interfaces: list of testbed network interfaces (XXX this parameter
-# should be removed I think, leftover from an old version)
+## Initialise host (TASK)
 @task
 @parallel
-def init_host(interfaces=''):
+def init_host():
     "Perform host initialization"
 
     # get type of current host
@@ -685,8 +848,7 @@ def init_host(interfaces=''):
         # disable auto-tuning of receive buffer
         run('sysctl net.ipv4.tcp_moderate_rcvbuf=0')
 
-        if interfaces == '':
-            interfaces = get_netint_cached(env.host_string, int_no=-1)
+        interfaces = get_netint_cached(env.host_string, int_no=-1)
 
         # disable all offloading, e.g. tso = tcp segment offloading
         for interface in interfaces:
@@ -753,8 +915,8 @@ def init_host(interfaces=''):
         # so 3-4MB receive and 7-8MB send)
 
 
-# Enable/disable ECN
-# paramters: ecn: '0' (disable ecn), '1' (enable ecn)
+## Enable/disable ECN (TASK)
+#  @param ecn If '0' disable ecn, if '1' enable ecn
 @task
 @parallel
 def init_ecn(ecn='0'):
@@ -794,12 +956,11 @@ def _param(name, adict):
     return val
 
 
-# Set congestion control algo parameters
-# Parameters:
-#       algo: name of congestion control algorithm
+## Set congestion control algo parameters
+#  @param algo Name of congestion control algorithm
 #             (newreno, cubic, cdg, hd, htcp, compound, vegas)
-#	args: arguments
-#	kwargs: keyword arguments
+#  @param args Arguments
+#  @param kwargs Keyword arguments
 def init_cc_algo_params(algo='newreno', *args, **kwargs):
     "Initialize TCP congestion control algorithm"
 
@@ -822,15 +983,14 @@ def init_cc_algo_params(algo='newreno', *args, **kwargs):
                 run('sysctl %s=%s' % (sysctl_name, val))
 
 
-# Set congestion control algo
-# Parameters:
-#	algo: name of congestion control algorithm
+## Set congestion control algorithm (TASK)
+#  @param algo Name of congestion control algorithm
 #              (newreno, cubic, cdg, hd, htcp, compound, vegas) or
 #	      'default' which will choose the default based on the OS or
 #	      'host<N>' where <N> ist an integer starting with 0 to select
 #                       OS from TPCONF_host_TCP_algos
-#       args: arguments
-#       kwargs: keyword arguments
+#  @param args Arguments (from user)
+#  @param kwargs Keyword arguments (from user)
 @task
 @parallel
 def init_cc_algo(algo='default', *args, **kwargs):
@@ -938,9 +1098,8 @@ def init_cc_algo(algo='default', *args, **kwargs):
     execute(init_cc_algo_params, algo=algo, *args, **kwargs)
 
 
-# Initialise dummynet
-# assume: ipfw is running in open mode, so we can login to the machine
-# Parameters:
+## Initialise dummynet
+## Assume: ipfw is running in open mode, so we can login to the machine
 def init_dummynet():
 
     with settings(warn_only=True):
@@ -964,9 +1123,8 @@ def init_dummynet():
     run('ipfw enable firewall')
 
 
-# Initialise Linux tc
-# assume: the Linux firewall is turned off or "open"
-# Parameters:
+## Initialise Linux tc
+## Assume: the Linux firewall is turned off or "open"
 def init_tc():
 
     # load pseudo interface mdoule
@@ -1008,8 +1166,7 @@ def init_tc():
     run('iptables -t mangle -A POSTROUTING -j MARK --set-mark 0')
 
 
-# Initialise the router
-# Parameters:
+## Initialise the router
 @task
 @parallel
 def init_router():
@@ -1037,10 +1194,9 @@ def init_router():
         abort("Router must be running FreeBSD or Linux")
 
 
-# Custom host initialisation
-# Parameters:
-#       args: arguments
-#	kwargs: keyword arguments
+## Custom host initialisation
+#  @param args Arguments (from user)
+#  @param kwargs Keyword arguments (from user)
 @task
 @parallel
 def init_host_custom(*args, **kwargs):
@@ -1060,10 +1216,11 @@ def init_host_custom(*args, **kwargs):
             run(cmd)
 
 
-# Do all host init
-# Parameters:
-#	ecn: '0' ECN off, '1' ECN on
-#	tcp_cc_algo: TCP congestion control algo (see init_cc_algo() for info)
+## Do all host init
+#  @param ecn ECN off if '0', ECN on if '1'
+#  @param tcp_cc_algo TCP congestion control algo (see init_cc_algo())
+#  @param args Arguments (from user)
+#  @param kwargs Keyword arguments (from user)
 def init_hosts(ecn='0', tcp_cc_algo='default', *args, **kwargs):
     execute(init_host, hosts=config.TPCONF_hosts)
     execute(init_ecn, ecn, hosts=config.TPCONF_hosts)

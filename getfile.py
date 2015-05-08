@@ -24,19 +24,19 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+## @package getfile
 # Get log/dump file from remote
 #
-# $Id: getfile.py 958 2015-02-12 04:52:49Z szander $
+# $Id: getfile.py 1257 2015-04-20 08:20:40Z szander $
 
 import os
 from fabric.api import get, local, run, abort, env, puts
 from hosttype import get_type_cached
 
 
-# Get md5 hash for file
-# Parameters:
-#       file_name: name of the file to compute MD5 over
-#       for_local: '0' -> run on remote host, '1' -> run on local host
+## Get MD5 hash for file
+#  @param file_name Name of the file to compute MD5 over
+#  @param for_local If '0' run on remote host, fi '1' run on local host
 def _get_md5val(file_name='', for_local='0'):
     "Get MD5 hash for file depending on OS"
 
@@ -56,10 +56,9 @@ def _get_md5val(file_name='', for_local='0'):
         run(md5_command, pty=False, shell=False)
 
 
-# Collect log file
-# Parameters:
-#       file_name: name of the log file
-#       local_dir: local directory to copy log file into
+## Collect log file
+#  @param file_name Name of the log file
+#  @param local_dir Local directory to copy log file into
 def getfile(file_name='', local_dir='.'):
     "Get file from remote and check that file is not corrupt"
 

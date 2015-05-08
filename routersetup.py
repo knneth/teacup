@@ -24,9 +24,10 @@
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
 #
+## @package routersetup
 # Router setup
 #
-# $Id: routersetup.py 958 2015-02-12 04:52:49Z szander $
+# $Id: routersetup.py 1268 2015-04-22 07:04:19Z szander $
 
 import config
 from fabric.api import task, hosts, run, execute, abort, env, settings
@@ -34,27 +35,28 @@ from hostint import get_netint_cached, get_address_pair
 from hosttype import get_type_cached
 
 
-# Initialise single dummynet pipe
-# XXX same queue but different delay/loss emulation
-# Parameters:
-#       source: source, can be an IP address or hostname or a subnet
-#               (e.g. 192.168.1.0/24)
-#       dest: destination, can be an IP address or hostname or a subnet
-#             (e.g. 192.168.1.0/24)
-#       rate: rate limit in bytes, e.g. 100000000 (100Mbps in bytes),
-#             10kbit, 100mbit
-#       delay: emulated delay in millieseconds
-#       rtt: emulated rtt in millieseconds
-#       loss: loss rate
-#	queue_size: queue size in slots (if a number) or bytes
-#                   (e.g. specified as XKbytes, where X is a number)
-#       queue_size_mult: multiply 'bdp' queue size with this factor
+## Initialise single dummynet pipe
+#  Same queue but different delay/loss emulation
+#  @param counter Queue ID number 
+#  @param source Source, can be an IP address or hostname or a subnet
+#                (e.g. 192.168.1.0/24)
+#  @param dest Destination, can be an IP address or hostname or a subnet
+#              (e.g. 192.168.1.0/24)
+#  @param rate Rate limit in bytes, e.g. 100000000 (100Mbps in bytes),
+#              10kbit, 100mbit
+#  @param delay Emulated delay in millieseconds
+#  @param rtt Emulated rtt in millieseconds (needed only for determining 
+#             queue size if not explicitly specified)
+#  @param loss Loss rate
+#  @param queue_size Queue size in slots (if a number) or bytes
+#                    (e.g. specified as XKbytes, where X is a number)
+#  @param queue_size_mult Multiply 'bdp' queue size with this factor
 #                        (must be a floating point)
-#	queue_disc: queueing discipline: fifo (default), red (RED)
-#	queue_disc_params: if queue_disc=='red' this must be set to:
-#               w_q/min_th/max_th/max_p  (see ipfw man page for details)
-# bidir: '0' (pipe only in forward direction), '1' (two pipes in both
-# directions)
+#  @param queue_disc Queueing discipline: fifo (default), red (RED)
+#  @param queue_disc_params: If queue_disc=='red' this must be set to:
+#                w_q/min_th/max_th/max_p  (see ipfw man page for details)
+#  @param bidir If '0' pipe only in forward direction, if '1' two pipes (one 
+#               in foward and one in backward direction)
 def init_dummynet_pipe(counter='1', source='', dest='', rate='', delay='',
                        rtt='', loss='', queue_size='', queue_size_mult='1.0',
                        queue_disc='', queue_disc_params='', bidir='0'):
@@ -101,32 +103,33 @@ def init_dummynet_pipe(counter='1', source='', dest='', rate='', delay='',
         run(create_pipe_cmd)
 
 
-# Initialse tc
-# setup a class (htb qdisc) for each interface with rate limits
-# setup actual qdisc (e.g. codel) as leaf qdisc for class
-# then redirect traffic to pseudo interface and apply netem to emulate
-# delay and/or loss
-# Parameters:
-#	source: source, can be an IP address or hostname or a subnet
-#               (e.g. 192.168.1.0/24)
-#	dest: destination, can be an IP address or hostname or a subnet
-#             (e.g. 192.168.1.0/24)
-#	rate: rate limit in bytes, e.g. 100000000 (100Mbps in bytes), 10kbit, 100mbit
-#	delay: emulated delay in millieseconds
-#	rtt: emulated rtt in millieseconds
-#	loss: loss rate
-#	queue_size: can be in packets or bytes depending on queue_disc; if in bytes
-#                   can use units, e.g. 1kb
-#	queue_size_mult: multiply 'bdp' queue size with this factor
-#                        (must be a floating point)
-#	queue_disc: fifo (mapped to pfifo, FreeBSD compatibility), fq_codel, codel, red,
-#                   choke, pfifo, pie (only as patch), ...
-#	queue_disc_params: parameters for queing discipline, see man pages for queuing
-#                          disciplines
-#       bidir: '0' (pipe only in forward direction), 
-#              '1' (two pipes in both directions)
-# attach_to_queue: specify number of existing queue to use, but emulate
-# different delay/loss
+## Initialse tc (Linux)
+## setup a class (htb qdisc) for each interface with rate limits
+## setup actual qdisc (e.g. codel) as leaf qdisc for class
+## then redirect traffic to pseudo interface and apply netem to emulate
+## delay and/or loss
+#  @param counter Queue ID number
+#  @param source Source, can be an IP address or hostname or a subnet
+#                (e.g. 192.168.1.0/24)
+#  @param dest Destination, can be an IP address or hostname or a subnet
+#              (e.g. 192.168.1.0/24)
+#  @param rate Rate limit in bytes, e.g. 100000000 (100Mbps in bytes), 10kbit, 100mbit
+#  @param delay Emulated delay in millieseconds
+#  @param rtt Emulated rtt in millieseconds (needed only for determining 
+#            queue size if not explicitly specified)
+#  @param loss Loss rate
+#  @param queue_size Can be in packets or bytes depending on queue_disc; if in bytes
+#                    can use units, e.g. 1kb
+#  @param queue_size_mult Multiply 'bdp' queue size with this factor
+#                         (must be a floating point)
+#  @param queue_disc fifo (mapped to pfifo, FreeBSD compatibility), fq_codel, codel, red,
+#                    choke, pfifo, pie (only as patch), ...
+#  @param queue_disc_params Parameters for queing discipline, see man pages for queuing
+#                           disciplines
+#  @param bidir If '0' (pipe only in forward direction), 
+#               if '1' (two pipes in both directions)
+#  @param attach_to_queue Specify number of existing queue to use, but emulate
+#                         different delay/loss
 def init_tc_pipe(counter='1', source='', dest='', rate='', delay='', rtt='', loss='',
                  queue_size='', queue_size_mult='1.0', queue_disc='', 
                  queue_disc_params='', bidir='0', attach_to_queue=''):
@@ -291,13 +294,13 @@ def init_tc_pipe(counter='1', source='', dest='', rate='', delay='', rtt='', los
         run(config_it_cmd)
 
 
-# Show dummynet pipes
+## Show dummynet pipes
 def show_dummynet_pipes():
     run('ipfw -a list')
     run('ipfw -a pipe list')
 
 
-# Show tc setup
+## Show tc setup
 def show_tc_setup():
 
     interfaces = get_netint_cached(env.host_string, int_no=-1)
@@ -314,7 +317,7 @@ def show_tc_setup():
     run('iptables -t mangle -vL')
 
 
-# Show pipe setup
+## Show pipe setup
 @task
 def show_pipes():
     "Show pipe setup on router"
@@ -330,11 +333,10 @@ def show_pipes():
         abort("Router must be running FreeBSD or Linux")
 
 
-# Configure a pipe on the router, encompassing rate shaping, AQM, 
-# loss/delay emulation
-# Parameters:
-#	See descriptions of init_dummynet_pipe() and init_tc_pipe()
-#	Note: attach_to_queue only works for Linux
+## Configure a pipe on the router, encompassing rate shaping, AQM, 
+## loss/delay emulation
+## For parameter explanations see descriptions of init_dummynet_pipe() and init_tc_pipe()
+## Note: attach_to_queue only works for Linux
 @task
 def init_pipe(counter='1', source='', dest='', rate='', delay='', rtt='', loss='',
               queue_size='', queue_size_mult='1.0', queue_disc='', 

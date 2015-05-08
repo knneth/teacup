@@ -1,12 +1,12 @@
 TEACUP (TCP Experiment Automation Controlled Using Python) INSTALL
 ==================================================================
 
-$Id: INSTALL 982 2015-02-13 00:56:04Z szander $
+$Id: INSTALL 1256 2015-04-20 04:04:34Z szander $
 
 ACKNOWLEDGMENTS
 ---------------
 
-TEACUP v0.8 was developed as part of a project funded by Cisco 
+TEACUP v0.9 was developed as part of a project funded by Cisco 
 Systems and titled "Study in TCP Congestion Control Performance In 
 A Data Centre". This is a collaborative effort between CAIA and 
 Fred Baker of Cisco Systems.
@@ -74,6 +74,10 @@ These are needed on the control host for plotting graphs.
 Install R using your package management tools or download R from
 http://www.r-project.org/ and follow the installation instructions from
 this web site.
+
+The following R packages/libraries need to be installed (please refer
+to the R manual on how to install R libraries)):
+- ggplot2 (for analyse_2d_density)
 
 Install pdfjam using your package management tools.
 

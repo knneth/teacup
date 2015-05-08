@@ -1,12 +1,14 @@
 BUGS
 
+- probably broken is the use of host names with explicit port sepecification,
+  e.g. specifying testhost1:222. don't really need ports in physical testbed
+  but need this with VMs on one host
 - fix web10g log file version chaos caused by version 2.0.9 producing different
   columns compared to version 2.0.7 (Windows etstas logger is equivalent to
   version 2.0.7). This only affects plots of unsmoothed TCP RTTs though.
   -> new version of web10g-logger will log the attribute names. need to attach
      atribute names for old log files based on the definitions. Allow using names
      instead of column numbers to refer to attributes 
-- ??? 
 
 POSSIBLE NEW FEATURES
 
@@ -18,6 +20,9 @@ POSSIBLE NEW FEATURES
 
 FUTURE WORK
 
+- check router and traffic configuration before actually running experiment. hard
+  to do as we would need to run the actual commands, unless we check each parameter
+  for all possible values, which is impossible for thing like extra_params.
 - use internal names for host instead of control interfaces. would make it easier
   to transition to different networks, but requires and additional mapping table.
 - check that all hosts are properly time synchronised (simple check implemented,
@@ -32,16 +37,7 @@ FUTURE WORK
 - change the code to get the MAC address directly, current approach
   is a bit inelegant
 - improve parameter checking
-- create different example configs instead / in additon to the big one
-- add analysis for collatoral damage vs service quality
-  - delay distribution DASH
-  - download time distribution (over bursts) DASH
-  - delay and jitter distribution for voip
-  - download times / rates for background tcp
-    - iperf output
-    - tcptrace -l outputs total goodput but not over time
-  - loss rates
-- refactor code (change to OO)
+- refactor code (change to OO structure)
   - traffic generator class
     - methods that are called for each generator from different places
       - check, initial_cleanup, start, stop, final_cleanup 
@@ -53,4 +49,3 @@ FUTURE WORK
       - without knowledge of tools don't know exactly what to start where 
       - must ensure dependencies are taken care of, e.g. server started before client
   - stop: split task list by host, parallel excute for each host
-- refactor code, use objects

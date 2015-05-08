@@ -1,3 +1,164 @@
+Version 0.9.3 (6th May 2015)
+----------------------------
+- Fixed wrong pdf file names for some analysis functions when multiple test 
+  IDs are specified
+- Extended init_os, so we can reboot non-resposnsive host(s) into a desired
+  operating system. User must specify MAC addresses of control/boot interfaces
+  of the hosts with the new parameter mac_list. Of course this only works if
+  a supported power controller is installed and configured for teacup, so 
+  teacup can power cycle the host(s).
+- Fixed bug in analyse functions that caused some flows not to be plotted
+  when function was called with a list of more than one test id
+- Added packet loss analysis function (ONLY works for game traffic thus far)
+- Fixed bug that plotted the same flow twice in one graph, in case we specify 
+  two (or more) source filters with the same IP and port (irrespective of 
+  whether they are S_ or D_ filters)
+- Added FILTER_FLOWS environment variable for time series plots. if set to 1, 
+  all flows that were not active will be filtered out. maybe this should be 
+  the default behaviour in the future, for now I have added it via the variable.
+
+Version 0.9.2 (28th April 2015)
+-------------------------------
+- Fixed extract_rtt and analyse_rtt so that if burst_sep = 0 then
+  timestamps are not normalised before plotting for each flow individually,
+  but plotting will normalise all timestamps based on the timestamp of the
+  first packet during the experiments. Basically this restires the behaviour
+  we had pre version 0.9. 
+- Fixed extract_ackseq and analyse_ackseq accordingly (see last point)
+- Added tags in code and script to generate code documentation with doxygen
+- For analyse_2d_density replaced merge_xdata and merge_ydata with merge_data
+- For burst-based analysis, instead of starting every burst at time zero,
+  we now normalise the start time of burst n of flow f based on the start 
+  time of the first burst n over all flows. this means if burst 1 of flow
+  a start a bit later than burst 1 of flow b, we now see the gap in time. 
+- Fixed bug in extract_rtt/analyse_rtt that causes wrong results if there
+  are multiple flows between the same two hosts with the same server port
+- Added client start delay parameter for game traffic generator
+- Changed type of plot from "both" to "points" for analyse_dash_goodput
+  so it is consistent with the other plot functions
+
+Version 0.9.1 (17th April 2015)
+-------------------------------
+- Fixed bug in caching of hosts that participated in experiment
+  (only occurs if processing experiments done with pre 0.9 versions)
+- Fixed bug in extract_rtt that caused incorrect RTT estimates in plots
+
+Version 0.9 (14th April 2015)
+-----------------------------
+- Fixed broken ack seq data extract with more than one test id
+- Fixed broken/missing burst_seq type conversion in analyse_ackseq
+- Added link speed setting for testbed interfaces on all hosts (except router).
+  Speed can be set to 10, 100, 100 or auto (default) 
+- added extract and plot method for incast inter-query times 
+  (analyse_incast_iqtimes)
+- added extract method for incast response times from tcpdump data
+- Fixed broken ts_correct for analyse_rtt
+- Timestamp correction is now enabled by default for all analysis functions
+  (ts_correct=1). If no clock offsets file can be computed, e.g. because
+  multicast ping was not enabled, a warning is printed and uncorrected 
+  timestamps are used.
+- Added logging for link speed setting on Windows
+- Added response time as metric for analyse_cmpexp
+- Added merge_data parameter for analsye_cmpexp that if set to '1'
+  will merge data from different flows/responders into one dataset
+- Added merge_xdata and merge_ydata parameters for analyse_2_density. if set
+  to '1' will merge data from different flows/responders into one dataset for
+  x-axis or y-axis data
+- Removed defaults for variables for init_topology. Must set command line
+  parameters or TPCONF variables. This is to protect against accidentally
+  configuring wrong switch.
+- Added multiple router support. TPCONF_router_queues can now be a dictionary
+  indexed by router names (listed in TPCONF_router) and the values are
+  of the same structure as TPCONF_router_queues. For backwards compatibility
+  TPCONF_router_queues can also be defined as list of tuples as before.
+- Optimised file finding with an experiment ID to directory cache (and also
+  removed a superfluous "find" in clock offset correct function). The cache
+  file is called teacup_dir_cache.txt and is created in the directory where
+  fab is executed. Cache entries are never deleted, so if one renames directories
+  or moves files, one should clear the whole cache by deleting the cache file 
+  or by selectively removing entries from the cache file.
+- allow absolute paths for out_dir, res_dir and pdf_dir
+- removed local('which <executable>') tests in analyse.py
+- added a way to specify the config file used. It can be specified using
+  fab's --set parameter to set the env variable teacup_config as follows:
+  fab --set teacup_config=config.py 
+- fixed crash in analyse_incast_iqtimes when ts_correct=1
+- added diff_to_burst_start parameter to analyse_incast_iqtimes, which allows 
+  to select whether time gaps are from the start of bursts or between consecutive 
+  packets
+- support for iqtimes in analyse_cmpexp, limited to time gaps between
+  consecutive packets. also data needs to be extracted beforhand as there
+  is no query_host parameter for analyse_cmpexp yet.
+- added sburst and eburst parameters for extract_incast and analyse_incast
+  (not for tcpdump data though, only for httperf log extraction)
+- added sburst and eburst parameters for analyse_cmpexp, so can be used
+  for response times or ackseq
+- fixed bug in analyse_cmpexp when group_by_prefix=1 that caused duplicate
+  x-axis labels and the plot function to fail
+- all varying parameters for a series of experiments are now logged in
+  <test_id_pfx>_varying_params.log.gz files
+- added TPCONF_pcap_snaplen parameter to configure the snaplen for
+  tcpdump
+- fixed incorrect x-axis max value for plot_time_series.R when plotting more
+  than 12 series over multiple graphs
+- added RTT burst plotting
+- added total_per_experiment switch for analyse_throughput and extract_throughput
+  if set to '1' plot aggregate throughput for all flows (selected with source_filter), 
+  if set to '0' plot per-flow throughput (default)
+- added analyse_goodput method to plot the goodput over time (goodput is
+  back on ackseq data, not on sequence numbers in data packets)
+- analyse_cmpexp does not read the varying parameters from config anymore. 
+  instead it builds the list of varying parameters from the first test ID 
+  given to the task. in order for this to work given that the test ID prefix 
+  can be freely chosen, one must specify the test id prefix as regular exression 
+  with the test_id_prefix parameter _if_ a non-default test ID prefix was used. 
+  for example, the following would match the default test ID prefix: 
+  test_id_prefix="[0-9]{8}\-[0-9]{6}_experiment_"  
+- Fixed bug where teacup tried to open tcpdump files collected on hosts that did
+  not actually participated in an experiment. List of participating hosts is
+  automatically generated from the data files (uname files).
+- added res_time_mode parameter for analyse_cmpexp. if set to
+  1 teacup will plot the nominal/theorectial response time in addition to the
+  observed response times. if set to 2 and ptype is 'median' or 'mean', teacup
+  will plot the ratio of observed median/mean response time and nominal
+  response time.  by default the variable is set to 0 (normal plot).
+- added slowest_only parameter to analyse_cmpexp and analyse_2d_density
+  to plot distributions over only the slowest responses in each burst
+  (had to change file name for slowest response time data to make this work)
+- added get_version task that prints out TEACUP version and SVN revision
+  info and copyright. SVN revision is in VERSION when installing from tar.
+  if no SVN revision in VERSION, then it will get the revision number from svn
+  info if the source is a checked out copy. If neither installed from tar or
+  checked out copy, then no SVN revision info will be printed.
+- added envronment variable NO_BARS for analyse_cmpexp. if set to 1 for
+  median/mean plots there will be points instead of bars. has no effect if
+  boxplots are plotted.
+- moved slowest_only computation for incast response times to extract_incast
+  and extract_incast_restimes
+- added another mode for slowest_only. if set to '2' it will compute the time
+  between the first request sent and the time the last response finished for
+  each burst.
+- renamed extract_throughput to extract_pktsizes
+- added flow cache for analysis tasks that extract data on a per flow basis.
+  tasks will only extract flows again if not found in cache. the flow cache
+  file is created in the fabfile directory is named teacup_flow_cache.txt 
+- teacup will backup the config file in the experiment directory before an 
+  experiment starts (it not only backs up config.py but also all sub config 
+  files included via execfile). All config files are put in file
+  <test_id_prefix>_config.tar.gz
+- archive all TPCONF_ variables for series of experiments in file
+  <test_id_prefix>_tpconf_vars.log.gz. if this file is present analysis methods
+  will use it to check hostname to internal IP mappings etc. instead of
+  config.py.
+- archive host name to IP mapping at time of experiment in file
+  <test_id_prefix>_nameip_map.log.gz
+- changed get_clock_offsets so it also uses <test_id_prefix>_tpconf_vars.log.gz
+  if available
+- if broadcast ping is enabled but TPCONF_bc_ping_address is not specified
+  the default multicast address 224.0.1.199 will be used
+- fix: the period parameter for start_httperf_incast and start_httperf_incast_n
+  can be a floating point number now
+
 Version 0.8.1 (20th February 2015)
 ----------------------------------
 - fixed abort if TPCONF_host_os has entry with host not actually used for
